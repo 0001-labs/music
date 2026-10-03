@@ -46,7 +46,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
     if(overlaps(t,next))return false;
     const changed=rows[t].classList.contains('vertical-track')!==vertical;
     positions[t]=next;
-    rows[t].classList.toggle('vertical-track',vertical);rows[t].classList.toggle('track-row',!vertical);
+    rows[t].classList.toggle('vertical-track',vertical);rows[t].classList.toggle('track-row',!vertical);rows[t].classList.toggle('compact-track',!vertical&&next.height===20);
     if(changed)onOrientationChange?.(t,vertical);
     Object.assign(rows[t].style,{left:next.x+'px',top:next.y+'px',width:next.width+'px',height:next.height+'px'});
     resizeCanvas();return true;
