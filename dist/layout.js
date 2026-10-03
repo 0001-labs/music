@@ -32,19 +32,20 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     });
     if(migrated&&Array.isArray(saved)&&saved.length>0&&saved.length<rows.length)positions.slice(saved.length).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,saved.length+t).map(item=>item.y+item.height))/placementStep)*placementStep;});
   }catch{}
+  let obstacles=()=>[];
   let drag=null,marquee=null,suppressClick=null,layer=10;
   const selected=new Set(),selectionBox=document.querySelector('#selection-marquee');
   function showSelection(){rows.forEach((row,t)=>row.classList.toggle('selected',selected.has(t)));}
   function selectOnly(t){selected.clear();selected.add(t);showSelection();}
   function save(){try{localStorage.setItem(key,JSON.stringify(positions));}catch{}onCommit?.();}
   function resizeCanvas(){
-    const width=Math.max(viewport.clientWidth,...positions.filter(p=>!p.deleted).map(p=>p.x+p.width+40));
-    const height=Math.max(viewport.clientHeight,...positions.filter(p=>!p.deleted).map(p=>p.y+p.height+40));
+    const width=Math.max(viewport.clientWidth,...positions.concat(obstacles()).filter(p=>!p.deleted).map(p=>p.x+p.width+40));
+    const height=Math.max(viewport.clientHeight,...positions.concat(obstacles()).filter(p=>!p.deleted).map(p=>p.y+p.height+40));
     canvas.style.width=Math.ceil(width/unit)*unit+'px';
     canvas.style.height=Math.ceil(height/unit)*unit+'px';
   }
   function intersects(a,b){return a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;}
-  function overlaps(t,next,limit=positions.length){return positions.some((p,i)=>i!==t&&i<limit&&!p.deleted&&intersects(next,p));}
+  function overlaps(t,next,limit=positions.length){return positions.some((p,i)=>i!==t&&i<limit&&!p.deleted&&intersects(next,p))||obstacles().some(p=>intersects(next,p));}
   function freePosition(position,occupied){
     const xs=new Set([position.x,0]),ys=new Set([position.y,0]);
     occupied.forEach(p=>{
@@ -55,7 +56,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     candidates.sort((a,b)=>(a.x-position.x)**2+(a.y-position.y)**2-((b.x-position.x)**2+(b.y-position.y)**2)||a.y-b.y||a.x-b.x);
     return candidates.find(p=>occupied.every(other=>!intersects(p,other)));
   }
-  function nearestFree(t,position,limit=positions.length){return freePosition(position,positions.filter((p,i)=>i!==t&&i<limit&&!p.deleted));}
+  function nearestFree(t,position,limit=positions.length){return freePosition(position,positions.filter((p,i)=>i!==t&&i<limit&&!p.deleted).concat(obstacles()));}
   let repaired=false;
   positions.forEach((p,t)=>{if(!p.deleted&&overlaps(t,p,t)){positions[t]=nearestFree(t,p,t);repaired=true;}});
   if(repaired||migrated)save();
@@ -83,7 +84,8 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
   }
   paintAll();
   function reflowGroup(indices,targets,baseline){
-    const next=baseline.map(p=>({...p})),occupied=[...targets],displaced=[];
+    targets=targets.map(target=>obstacles().some(p=>intersects(target,p))?freePosition(target,obstacles()):target);
+    const next=baseline.map(p=>({...p})),occupied=[...targets,...obstacles()],displaced=[];
     indices.forEach((t,i)=>next[t]=targets[i]);
     baseline.forEach((p,i)=>{if(!p.deleted&&!indices.includes(i)){if(targets.some(target=>intersects(p,target)))displaced.push(i);else occupied.push(p);}});
     displaced.forEach(i=>{next[i]=freePosition(baseline[i],occupied);occupied.push(next[i]);});
@@ -159,7 +161,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     if(canvas.hasPointerCapture(state.id))canvas.releasePointerCapture(state.id);
   }
   document.addEventListener('pointerdown',event=>{
-    if(event.button!==0||!event.isPrimary||event.target.closest('.track-surface,.transport,.context-menu,.canvas-playhead,.canvas-playhead-track,input,textarea,select,[contenteditable="true"]'))return;
+    if(event.button!==0||!event.isPrimary||event.target.closest('.track-surface,.transport,.context-menu,.canvas-playhead,.canvas-playhead-track,.arrangement-block,.arrangement-block-menu,input,textarea,select,[contenteditable="true"]'))return;
     finish(true);
     marquee={id:event.pointerId,startX:event.clientX+window.scrollX,startY:event.clientY+window.scrollY,clientX:event.clientX,clientY:event.clientY,before:new Set(selected),additive:event.shiftKey||event.metaKey||event.ctrlKey,active:false};
     if(!marquee.additive){selected.clear();showSelection();}
@@ -221,5 +223,5 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     selected.clear();showSelection();paintAll();save();
   }
   function cancelGestures(){finish(true);finishMarquee(true);}
-  return {tick,toggleOrientation,deleteTracks,restore,reset:()=>restore(defaultPositions),cancelGestures,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
+  return {setObstacles(callback){obstacles=callback;paintAll();},tick,toggleOrientation,deleteTracks,restore,reset:()=>restore(defaultPositions),cancelGestures,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
 };
