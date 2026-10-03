@@ -318,9 +318,14 @@ function currentBeat(t){const state=playback[t];return state.running?(state.beat
 function snapBeat(beat,t){return Math.min(Math.round(Math.max(0,beat)/4)*4,loopBeats[t])%loopBeats[t];}
 function hasPlayback(){return playback.some(state=>state.running||state.starting)||sweeps.hasPlayback();}
 function render(){
-  const active=hasPlayback();
+  const active=playback.some(state=>state.running||state.starting)||sweeps.read().some(head=>head.looping&&(head.playing||head.loading));
   play.querySelector('.play-icon').textContent=active?'Ⅱ':'▶';
-  play.setAttribute('aria-label',active?'Pause all tracks':'Play all tracks');
+  play.setAttribute('aria-label',active?'Pause track loops':'Play all track loops');
+  play.title=active?'Pause loops':'Play loops';
+  const arrangementActive=sweeps.read().some(head=>!head.looping&&(head.playing||head.loading));
+  const arrangementButton=$('#play-arrangement');arrangementButton.textContent=arrangementActive?'Ⅱ':'▶';
+  arrangementButton.setAttribute('aria-label',arrangementActive?'Pause arrangement':'Play arrangement from first track to last');
+  arrangementButton.title=arrangementActive?'Pause arrangement':'Play arrangement once';
   rows.forEach((row,t)=>{
     row.classList.toggle('silent',!audible(t));
     row.classList.toggle('has-track-state',muted[t]||solo[t]);
@@ -436,7 +441,19 @@ document.querySelectorAll('[data-clip]').forEach(button=>button.addEventListener
 }));
 document.querySelectorAll('[data-mute]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.mute);muted[t]=!muted[t];updateGain(t);render();editHistory.record();}));
 document.querySelectorAll('[data-solo]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.solo);solo[t]=!solo[t];names.forEach((_,i)=>updateGain(i));render();editHistory.record();}));
-play.addEventListener('click',toggleAll);$('#stop').addEventListener('click',stop);
+play.addEventListener('click',()=>{
+  if(sweeps.read().some(head=>!head.looping)){stop();void startTracks(names.map((_,t)=>t));}
+  else toggleAll();
+});
+$('#play-arrangement').addEventListener('click',()=>{
+  const sequence=sweeps.read().find(head=>!head.looping);
+  if(sequence&&(sequence.playing||sequence.loading)){pause();return;}
+  if(sequence){sweeps.resume();return;}
+  stop();const positions=layout.getPositions().filter(p=>!p.deleted);if(!positions.length)return;
+  const first=Math.min(...positions.map(p=>p.x)),top=Math.max(0,Math.min(...positions.map(p=>p.y))-window.musicGrid.placementStep);
+  void sweeps.add(first,top,false,false);
+});
+$('#stop').addEventListener('click',stop);
 function changeTempo(value){
   const active=names.map((_,t)=>t).filter(t=>playback[t].running||playback[t].starting);
   active.forEach(pauseTrack);sweeps.setTempo();tempo=value;$('#tempo').value=value;sweeps.reschedule();if(active.length)void startTracks(active);
