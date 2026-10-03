@@ -24,3 +24,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .track-name{padding:0 4px 0 17px}.track-label{font-size:14px}.track-controls{z-index:6}.vertical-track .track-controls{top:auto;bottom:1px;left:1px;right:auto}.track-row.compact-track .resize-handle{right:33px}
 
 .track-surface{transition:left 150ms cubic-bezier(.2,.7,.2,1),top 150ms cubic-bezier(.2,.7,.2,1)}.track-surface.dragging{transition:none}@media(prefers-reduced-motion:reduce){.track-surface{transition:none}}
+
+.track-surface.selected{outline:1px solid var(--ink);outline-offset:-1px}#selection-marquee{position:absolute;z-index:900;pointer-events:none;border:1px solid var(--ink);background:#1e1e1e08}#selection-marquee[hidden]{display:none}
