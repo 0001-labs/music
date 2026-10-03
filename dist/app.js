@@ -26,16 +26,16 @@ const $=selector=>document.querySelector(selector);
 const playback=names.map(()=>({running:false,starting:false,beat:0,startedAt:0,epoch:0,source:null}));
 let tempo=112,ctx,master,analyser,gains=[],arrangements,loading,barOrigin=null,pausedTracks=[];
 const play=$('#play'),message=$('#message');
-function waveform(peaks,vertical=false,width=160,height=16,startPixel=0){
+function waveform(peaks,vertical=false,width=160,height=16,startPixel=0,displayPixelsPerBeat=pixelsPerBeat){
   const length=vertical?height:width,cross=vertical?width:height;
-  const count=Math.max(1,Math.floor(length/2)),max=Math.max(...peaks,.001);
-  const samplesPerPixel=peaks.length/(totalBeats*pixelsPerBeat);
-  // Time stays fixed to the paper grid; shortening a lane crops its waveform.
+  const first=(2-startPixel%2)%2,count=Math.max(1,Math.ceil((length-first)/2)),max=Math.max(...peaks,.001);
+  const samplesPerPixel=peaks.length/(totalBeats*displayPixelsPerBeat);
+  // The display scale samples the same audio; only the end handle trims duration.
   const bars=Array.from({length:count},(_,i)=>{
-    const start=Math.floor((startPixel+i*2)*samplesPerPixel),end=Math.max(start+1,Math.ceil((startPixel+i*2+2)*samplesPerPixel));
+    const pixel=first+i*2,start=Math.floor((startPixel+pixel)*samplesPerPixel),end=Math.max(start+1,Math.ceil((startPixel+pixel+2)*samplesPerPixel));
     let peak=0;for(let p=start;p<end;p++)peak=Math.max(peak,peaks[p%peaks.length]);
     const amplitude=Math.max(1,Math.round(peak/max*cross*.9)),offset=Math.round((cross-amplitude)/2);
-    return vertical?`<rect x="${offset}" y="${i*2}" width="${amplitude}" height="1" fill="currentColor"/>`:`<rect x="${i*2}" y="${offset}" width="1" height="${amplitude}" fill="currentColor"/>`;
+    return vertical?`<rect x="${offset}" y="${pixel}" width="${amplitude}" height="1" fill="currentColor"/>`:`<rect x="${pixel}" y="${offset}" width="1" height="${amplitude}" fill="currentColor"/>`;
   }).join('');
   return `<svg class="waveform" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="width:${width}px;height:${height}px" shape-rendering="crispEdges" aria-hidden="true">${bars}</svg>`;
 }
@@ -48,9 +48,10 @@ function trackControls(name,t){
 function trackClips(t,vertical=false){
   return clips[t].map((clip,c)=>`<button class="clip${vertical?' vertical-clip':''}" data-clip="${t},${c}" aria-label="${names[t]}: ${clip.name}. Click to move playhead." title="${clip.name}"></button>`).join('');
 }
-function resizeHandle(t){return `<button class="resize-handle" data-resize="${t}" aria-label="Resize ${names[t]} waveform; use arrow keys" title="Drag to resize"></button>`;}
-$('#tracks').innerHTML=names.slice(0,6).map((name,t)=>`<div class="track-row track-surface" data-track="${t}">${trackChip(name,t)}<div class="clips" data-timeline="${t}">${trackClips(t)}<div class="playhead" aria-hidden="true" hidden></div></div>${trackControls(name,t)}${resizeHandle(t)}</div>`).join('');
-$('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-track="6">${trackChip(names[6],6)}<div class="vertical-lane"><div class="vertical-clips" data-timeline="6">${trackClips(6,true)}</div><div class="playhead vertical-playhead" aria-hidden="true" hidden></div></div>${trackControls(names[6],6)}${resizeHandle(6)}</div>`;
+function resizeHandle(t){return `<button class="resize-handle" data-resize="${t}" aria-label="Scale ${names[t]} display; use arrow keys" title="Scale display"></button>`;}
+function trimHandle(t){return `<button class="trim-handle" data-trim="${t}" aria-label="Trim ${names[t]} loop; use arrow keys" title="Trim loop end"></button>`;}
+$('#tracks').innerHTML=names.slice(0,6).map((name,t)=>`<div class="track-row track-surface" data-track="${t}">${trackChip(name,t)}<div class="clips" data-timeline="${t}">${trackClips(t)}<div class="playhead" aria-hidden="true" hidden></div></div>${trackControls(name,t)}${resizeHandle(t)}${trimHandle(t)}</div>`).join('');
+$('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-track="6">${trackChip(names[6],6)}<div class="vertical-lane"><div class="vertical-clips" data-timeline="6">${trackClips(6,true)}</div><div class="playhead vertical-playhead" aria-hidden="true" hidden></div></div>${trackControls(names[6],6)}${resizeHandle(6)}${trimHandle(6)}</div>`;
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
@@ -76,18 +77,19 @@ document.addEventListener('dblclick',event=>{
 });
 const waveformSizes=Array(names.length).fill('');
 function updateWaveforms(sizes){
-  sizes.forEach(({width,height,vertical},t)=>{
-    const key=`${width},${height},${vertical}`;if(waveformSizes[t]===key)return;
+  sizes.forEach(({width,height,vertical,beats},t)=>{
+    const key=`${width},${height},${vertical},${beats}`;if(waveformSizes[t]===key)return;
     waveformSizes[t]=key;
-    const length=vertical?height:width,part=length/4;
+    const length=vertical?height:width,part=length/4,displayPixelsPerBeat=length/beats;
+    rows[t].style.setProperty('--clip-span',8*displayPixelsPerBeat+'px');
     const clipWidth=vertical?width-6:part,clipHeight=vertical?part:height-4;
     cells[t].forEach((cell,c)=>{
-      cell.innerHTML=waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part);
+      cell.innerHTML=waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part,displayPixelsPerBeat);
       cell.style.backgroundPosition=vertical?`0px ${-c*part}px`:`${-c*part}px 0px`;
-      const clip=clips[t][Math.floor(c*part/(8*pixelsPerBeat))%4];
+      const clip=clips[t][Math.floor(c*part/(8*displayPixelsPerBeat))%4];
       cell.title=clip.name;cell.setAttribute('aria-label',`${names[t]}: ${clip.name}. Click to move playhead.`);
     });
-    resizeLoop(t,length/pixelsPerBeat);
+    resizeLoop(t,beats);
   });
 }
 function tint(hex,amount){return '#'+[1,3,5].map(index=>Math.round(255*(1-amount)+parseInt(hex.slice(index,index+2),16)*amount).toString(16).padStart(2,'0')).join('');}
@@ -256,7 +258,7 @@ document.querySelectorAll('[data-clip]').forEach(button=>button.addEventListener
   const rect=rows[t].getBoundingClientRect(),vertical=position.vertical;
   const length=vertical?position.height:position.width;
   const pixel=event.detail===0?c*length/4:Math.max(0,Math.min(length,vertical?event.clientY-rect.top:event.clientX-rect.left));
-  seekTrack(t,pixel/pixelsPerBeat);
+  seekTrack(t,pixel/length*position.beats);
 }));
 document.querySelectorAll('[data-mute]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.mute);muted[t]=!muted[t];updateGain(t);render();}));
 document.querySelectorAll('[data-solo]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.solo);solo[t]=!solo[t];names.forEach((_,i)=>updateGain(i));render();}));
@@ -272,7 +274,7 @@ function updatePlayhead(){
   playheads.forEach((head,t)=>{
     const beat=currentBeat(t),active=playback[t].running&&audible(t);
     const vertical=head.classList.contains('vertical-playhead');
-    head.style[vertical?'top':'left']=Math.floor(beat*pixelsPerBeat)+'px';
+    head.style[vertical?'top':'left']=Math.floor(beat/loopBeats[t]*(vertical?sizes[t].height:sizes[t].width)+1e-7)+'px';
     head.hidden=!active||ctx.currentTime<playback[t].startedAt;
     cells[t].forEach(cell=>cell.classList.toggle('active',(active||sweeps.trackActive(t))&&audible(t)));
   });

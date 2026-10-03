@@ -8,12 +8,15 @@ window.createMusicLayout=function(rows,onOrientationChange){
   const minimumSize=vertical=>vertical?{width:80,height:160}:{width:160,height:20};
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
-  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*unit,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track')}));
+  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*unit,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
   try{
     const saved=JSON.parse(localStorage.getItem(key));
     if(Array.isArray(saved)&&saved.length===rows.length&&saved.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.y>=0&&p.x<=100000&&p.y<=100000))positions=saved.map((p,t)=>{
       const vertical=typeof p.vertical==='boolean'?p.vertical:positions[t].vertical;
-      return {x:snap(p.x),y:snap(p.y),vertical,width:Number.isFinite(p.width)&&p.width<=100000?sizeSnap(t,'width',p.width,vertical):positions[t].width,height:Number.isFinite(p.height)&&p.height<=100000?sizeSnap(t,'height',p.height,vertical):positions[t].height};
+      const hasBeats=Number.isFinite(p.beats)&&p.beats>=2&&p.beats<=2500;
+      const dimension=(axis,value)=>Number.isFinite(value)&&value<=100000?(hasBeats?Math.max(minimumSize(vertical)[axis],snap(value)):sizeSnap(t,axis,value,vertical)):positions[t][axis];
+      const width=dimension('width',p.width),height=dimension('height',p.height);
+      return {x:snap(p.x),y:snap(p.y),vertical,width,height,beats:hasBeats?p.beats:(vertical?height:width)/40};
     });
   }catch{}
   let drag=null,marquee=null,suppressClick=null,layer=10;
@@ -47,14 +50,22 @@ window.createMusicLayout=function(rows,onOrientationChange){
     const next=positions[t],changed=rows[t].classList.contains('vertical-track')!==next.vertical;
     rows[t].classList.toggle('vertical-track',next.vertical);rows[t].classList.toggle('track-row',!next.vertical);rows[t].classList.toggle('compact-track',!next.vertical&&next.height===20);
     if(changed)onOrientationChange?.(t,next.vertical);
-    const floating=drag?.active&&!drag.resize&&drag.members.includes(t);
+    const floating=drag?.active&&!drag.resize&&!drag.trim&&drag.members.includes(t);
     Object.assign(rows[t].style,{left:(floating?drag.baseline[t].x+drag.deltaX:next.x)+'px',top:(floating?drag.baseline[t].y+drag.deltaY:next.y)+'px',width:next.width+'px',height:next.height+'px'});
   }
   function paintAll(){rows.forEach((_,t)=>paint(t));resizeCanvas();}
-  function place(t,x,y,width=positions[t].width,height=positions[t].height,vertical=positions[t].vertical){
-    const next={x:snap(x),y:snap(y),vertical,width:sizeSnap(t,'width',width,vertical),height:sizeSnap(t,'height',height,vertical)};
+  function place(t,x,y,width=positions[t].width,height=positions[t].height,vertical=positions[t].vertical,beats=positions[t].beats,trim=false){
+    const dimension=(axis,value)=>trim?Math.max(minimumSize(vertical)[axis],snap(value)):sizeSnap(t,axis,value,vertical);
+    const next={x:snap(x),y:snap(y),vertical,beats,width:dimension('width',width),height:dimension('height',height)};
     if(overlaps(t,next))return false;
     positions[t]=next;paint(t);resizeCanvas();return true;
+  }
+  function trimTrack(t,delta,baseline=positions[t]){
+    const length=baseline.vertical?baseline.height:baseline.width,pixelsPerBeat=length/baseline.beats;
+    const minimumBeats=Math.max(2,Math.ceil(minimumSize(baseline.vertical)[baseline.vertical?'height':'width']/pixelsPerBeat/2)*2);
+    const beats=Math.max(minimumBeats,Math.round((baseline.beats+delta/pixelsPerBeat)/2)*2);
+    const nextLength=snap(beats*pixelsPerBeat);
+    return place(t,baseline.x,baseline.y,baseline.vertical?baseline.width:nextLength,baseline.vertical?nextLength:baseline.height,baseline.vertical,beats,true);
   }
   paintAll();
   function reflowGroup(indices,targets,baseline){
@@ -73,7 +84,8 @@ window.createMusicLayout=function(rows,onOrientationChange){
   function move(){
     if(!drag?.active)return;
     const dx=drag.clientX+window.scrollX-drag.startX,dy=drag.clientY+window.scrollY-drag.startY;
-    if(drag.resize)place(drag.t,drag.x,drag.y,drag.width+dx,drag.height+dy);
+    if(drag.trim)trimTrack(drag.t,drag.vertical?dy:dx,drag.baseline[drag.t]);
+    else if(drag.resize)place(drag.t,drag.x,drag.y,drag.width+dx,drag.height+dy);
     else{
       drag.deltaX=Math.max(dx,-Math.min(...drag.members.map(t=>drag.baseline[t].x)));
       drag.deltaY=Math.max(dy,-Math.min(...drag.members.map(t=>drag.baseline[t].y)));
@@ -86,33 +98,34 @@ window.createMusicLayout=function(rows,onOrientationChange){
     const state=drag;drag=null;
     if(state.active){
       if(cancel)positions=state.baseline.map(p=>({...p}));
-      suppressClick=state.t;state.members.forEach(t=>{rows[t].classList.remove('dragging');rows[t].classList.remove('resizing');});
-      document.body.classList.remove('moving-track');document.body.classList.remove('resizing-track');
+      suppressClick=state.t;state.members.forEach(t=>{rows[t].classList.remove('dragging');rows[t].classList.remove('resizing');rows[t].classList.remove('trimming');});
+      document.body.classList.remove('moving-track');document.body.classList.remove('resizing-track');document.body.classList.remove('trimming-track');
       paintAll();if(!cancel)save();
       if(rows[state.t].hasPointerCapture(state.id))rows[state.t].releasePointerCapture(state.id);
     }
   }
   rows.forEach((row,t)=>{
     row.setAttribute('role','group');
-    row.setAttribute('aria-label',`${row.querySelector('.track-label').textContent}. Drag to move; Select and use arrow keys to move one grid square. The corner handle resizes the waveform.`);
+    row.setAttribute('aria-label',`${row.querySelector('.track-label').textContent}. Drag to move; Select and use arrow keys to move one grid square. The corner handle scales its display; the centered end handle trims its loop.`);
     row.addEventListener('pointerdown',event=>{
       if(event.button!==0||!event.isPrimary||event.target.closest('[data-track-play],[data-mute],[data-solo]'))return;
       suppressClick=null;document.activeElement?.blur();
       if(event.shiftKey){if(selected.has(t))selected.delete(t);else selected.add(t);showSelection();suppressClick=t;if(!selected.has(t))return;}
       else if(!selected.has(t))selectOnly(t);
-      const resize=!!event.target.closest('[data-resize]');
-      drag={t,id:event.pointerId,startX:event.clientX+window.scrollX,startY:event.clientY+window.scrollY,clientX:event.clientX,clientY:event.clientY,...positions[t],baseline:positions.map(p=>({...p})),members:resize?[t]:Array.from(selected),resize,active:false};
+      const resize=!!event.target.closest('[data-resize]'),trim=!!event.target.closest('[data-trim]');
+      drag={t,id:event.pointerId,startX:event.clientX+window.scrollX,startY:event.clientY+window.scrollY,clientX:event.clientX,clientY:event.clientY,...positions[t],baseline:positions.map(p=>({...p})),members:resize||trim?[t]:Array.from(selected),resize,trim,active:false};
     });
     row.addEventListener('click',event=>{
       if(event.detail!==0&&suppressClick===t){suppressClick=null;event.preventDefault();event.stopImmediatePropagation();}
     },true);
     row.addEventListener('keydown',event=>{
       const steps={ArrowLeft:[-unit,0],ArrowRight:[unit,0],ArrowUp:[0,-unit],ArrowDown:[0,unit]};
-      const resize=!!event.target?.closest('[data-resize]');
-      if((event.altKey||resize)&&steps[event.key]){
+      const resize=!!event.target?.closest('[data-resize]'),trim=!!event.target?.closest('[data-trim]');
+      if((event.altKey||resize||trim)&&steps[event.key]){
         event.preventDefault();event.stopPropagation();const [x,y]=steps[event.key];
         finish(true);row.style.zIndex=++layer;
-        if(resize)place(t,positions[t].x,positions[t].y,positions[t].width+Math.sign(x)*sizeStep(t,'width'),positions[t].height+Math.sign(y)*sizeStep(t,'height'));
+        if(trim){const p=positions[t],delta=p.vertical?y:x;if(delta)trimTrack(t,Math.sign(delta)*2*(p.vertical?p.height:p.width)/p.beats);}
+        else if(resize)place(t,positions[t].x,positions[t].y,positions[t].width+Math.sign(x)*sizeStep(t,'width'),positions[t].height+Math.sign(y)*sizeStep(t,'height'));
         else{if(!selected.has(t))selectOnly(t);moveSelected(x,y);}
         save();
       }
@@ -149,20 +162,21 @@ window.createMusicLayout=function(rows,onOrientationChange){
     if(!drag.active&&Math.hypot(event.clientX+window.scrollX-drag.startX,event.clientY+window.scrollY-drag.startY)>=6){
       drag.active=true;rows[drag.t].setPointerCapture(drag.id);rows[drag.t].style.zIndex=++layer;
       drag.members.forEach(t=>{rows[t].classList.add('dragging');rows[t].style.zIndex=++layer;});
-      if(drag.resize)rows[drag.t].classList.add('resizing');
-      document.body.classList.add(drag.resize?'resizing-track':'moving-track');
+      if(drag.resize)rows[drag.t].classList.add('resizing');if(drag.trim)rows[drag.t].classList.add('trimming');
+      document.body.classList.add(drag.trim?'trimming-track':drag.resize?'resizing-track':'moving-track');
     }
     if(drag.active){event.preventDefault();move();}
   },{passive:false});
   document.addEventListener('pointerup',event=>{if(marquee&&event.pointerId===marquee.id)finishMarquee();if(drag&&event.pointerId===drag.id)finish();});
   document.addEventListener('pointercancel',event=>{if(marquee&&event.pointerId===marquee.id)finishMarquee(true);if(drag&&event.pointerId===drag.id)finish(true);});
   document.addEventListener('keydown',event=>{
-    if(event.defaultPrevented||event.target?.closest?.('input,textarea,select,[contenteditable="true"],#track-menu,.canvas-playhead,[data-resize]'))return;
+    if(event.defaultPrevented||event.target?.closest?.('input,textarea,select,[contenteditable="true"],#track-menu,.canvas-playhead'))return;
     if(event.key==='Escape'){
       if(marquee){event.preventDefault();finishMarquee(true);}
       else if(drag){event.preventDefault();finish(true);}
       else{selected.clear();showSelection();}return;
     }
+    if(event.target?.closest?.('[data-resize],[data-trim]'))return;
     const steps={ArrowLeft:[-unit,0],ArrowRight:[unit,0],ArrowUp:[0,-unit],ArrowDown:[0,unit]};
     if(selected.size&&steps[event.key]){event.preventDefault();moveSelected(...steps[event.key]);}
   });
@@ -178,9 +192,9 @@ window.createMusicLayout=function(rows,onOrientationChange){
   function toggleOrientation(t){
     finish(true);
     const old=positions[t],vertical=!old.vertical;
-    let next={...old,vertical,width:sizeSnap(t,'width',old.height,vertical),height:sizeSnap(t,'height',old.width,vertical)};
+    let next={...old,vertical,width:Math.max(minimumSize(vertical).width,old.height),height:Math.max(minimumSize(vertical).height,old.width)};
     if(overlaps(t,next))next=nearestFree(t,next);
-    rows[t].style.zIndex=++layer;place(t,next.x,next.y,next.width,next.height,vertical);save();
+    rows[t].style.zIndex=++layer;place(t,next.x,next.y,next.width,next.height,vertical,next.beats,true);save();
   }
   return {tick,toggleOrientation,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
 };
