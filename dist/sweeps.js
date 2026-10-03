@@ -1,5 +1,5 @@
 'use strict';
-// A blue canvas loop mixes both track orientations on a shared audio-clock timeline.
+// A global canvas loop mixes both track orientations on a shared audio-clock timeline.
 window.createMusicSweeps=function(options){
   const heads=[];let activeSignature='';
   const axis=(p,vertical)=>({start:vertical?p.y:p.x,end:vertical?p.y+p.height:p.x+p.width,cross:vertical?p.x:p.y,span:vertical?p.width:p.height});
@@ -77,10 +77,10 @@ window.createMusicSweeps=function(options){
     const head={origin,position:origin,cross:Math.max(0,Math.round((vertical?x:y)/20)*20),vertical,startedAt:0,running:false,loading:false,paused:false,epoch:0,voices:[],skipped:new Set(),source:null};
     const tracks=geometry(head,options.positions());if(!tracks.length||Math.max(...tracks.map(p=>p.end))<=origin)return;
     head.end=Math.max(...tracks.map(p=>p.end));
-    const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.setAttribute('role','group');element.setAttribute('aria-label','Blue playback loop');
-    const stop=document.createElement('button');stop.className='canvas-loop-stop';stop.textContent='■';stop.setAttribute('aria-label','Stop blue playback loop');stop.title='Stop loop';
+    const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.setAttribute('role','group');element.setAttribute('aria-label','Global playback loop');
+    const stop=document.createElement('button');stop.className='canvas-loop-stop';stop.textContent='■';stop.setAttribute('aria-label','Stop global playback loop');stop.title='Stop loop';
     const progress=document.createElement('span');progress.className='canvas-loop-progress';progress.setAttribute('aria-hidden','true');
-    const cursor=document.createElement('button');cursor.className='canvas-playhead'+(vertical?' down':'');cursor.setAttribute('aria-label','Stop blue playback loop');cursor.title='Stop loop';
+    const cursor=document.createElement('button');cursor.className='canvas-playhead'+(vertical?' down':'');cursor.setAttribute('aria-label','Stop global playback loop');cursor.title='Stop loop';
     const end=event=>{event.stopPropagation();remove(head);options.changed();};stop.addEventListener('click',end);cursor.addEventListener('click',end);
     element.appendChild(progress);element.appendChild(stop);head.element=element;head.cursor=cursor;head.progress=progress;head.stopButton=stop;
     heads.push(head);options.canvas.appendChild(element);options.canvas.appendChild(cursor);paint(head,options.positions());void launch(head);return head;
