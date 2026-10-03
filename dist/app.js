@@ -32,10 +32,11 @@ function trackChip(name,t){
 function trackClips(t,vertical=false){
   return clips[t].map((clip,c)=>`<button class="clip${vertical?' vertical-clip':''}" data-clip="${t},${c}" aria-label="${names[t]}: ${clip.name}. Click to move playhead." title="${clip.name}">${waveform(clip.peaks,vertical)}</button>`).join('');
 }
-$('#tracks').innerHTML=names.slice(0,6).map((name,t)=>`<div class="track-row track-surface" data-track="${t}">${trackChip(name,t)}<div class="clips" data-timeline="${t}">${trackClips(t)}</div></div>`).join('');
-$('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-track="6">${trackChip(names[6],6)}<div class="vertical-lane"><div class="vertical-clips" data-timeline="6">${trackClips(6,true)}</div><div id="vertical-playhead" class="playhead vertical-playhead" aria-hidden="true"></div></div></div>`;
+$('#tracks').innerHTML=names.slice(0,6).map((name,t)=>`<div class="track-row track-surface" data-track="${t}">${trackChip(name,t)}<div class="clips" data-timeline="${t}">${trackClips(t)}<div class="playhead" aria-hidden="true" hidden></div></div></div>`).join('');
+$('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-track="6">${trackChip(names[6],6)}<div class="vertical-lane"><div class="vertical-clips" data-timeline="6">${trackClips(6,true)}</div><div class="playhead vertical-playhead" aria-hidden="true" hidden></div></div></div>`;
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
+const playheads=rows.map(row=>row.querySelector('.playhead'));
 function audible(t){return !muted[t]&&(!solo.some(Boolean)||solo[t]);}
 function updateGain(t){if(gains[t])gains[t].gain.setTargetAtTime(audible(t)?1:0,ctx.currentTime,.012);}
 function currentBeat(){return running?Math.max(0,(ctx.currentTime-origin)*tempo/60)%totalBeats:pausedBeat;}
@@ -50,6 +51,7 @@ function render(){
     mute.classList.toggle('muted',muted[t]);mute.setAttribute('aria-pressed',muted[t]);
     s.classList.toggle('soloed',solo[t]);s.setAttribute('aria-pressed',solo[t]);
   });
+  updatePlayhead();
 }
 function createAudio(){
   if(ctx)return;
@@ -103,8 +105,11 @@ $('#tempo').addEventListener('change',event=>{const value=Number(event.target.va
 document.addEventListener('keydown',event=>{if(event.code==='Space'&&!/INPUT|BUTTON|TEXTAREA|SELECT/.test(event.target.tagName)){event.preventDefault();if(!starting)running?pause():void start();}});
 function updatePlayhead(){
   const beat=currentBeat();
-  $('#playhead').style.left=(80+beat/totalBeats*640)+'px';$('#playhead').classList.toggle('playing',running);
-  $('#vertical-playhead').style.top=(beat/totalBeats*640)+'px';$('#vertical-playhead').classList.toggle('playing',running);
+  const position=Math.floor(beat/totalBeats*640)+'px';
+  playheads.forEach(head=>{
+    head.style[head.classList.contains('vertical-playhead')?'top':'left']=position;
+  });
+  playheads.forEach((head,t)=>{head.hidden=!running||!audible(t);});
   const segment=Math.floor(beat/8);
   cells.forEach((row,t)=>row.forEach((cell,c)=>cell.classList.toggle('active',running&&audible(t)&&c===segment)));
 }
