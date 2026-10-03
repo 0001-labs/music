@@ -27,7 +27,7 @@ const trackPeaks=clips.map(row=>row.flatMap(clip=>clip.peaks));
 const expandedArrangements=names.map(()=>null);
 const $=selector=>document.querySelector(selector);
 const playback=names.map(()=>({running:false,starting:false,beat:0,startedAt:0,epoch:0,source:null}));
-let blocks=null,blockTransaction=false;
+let blocks=null,blockTransaction=false,rootRestoring=false;
 function recordEdit(){if(!blockTransaction)editHistory?.record();}
 let tempo=112,ctx,master,analyser,gains=[],arrangements,loading,barOrigin=null,pausedTracks=[];
 const play=$('#play'),message=$('#message');
@@ -327,7 +327,7 @@ document.addEventListener('pointerdown',event=>{if(menuTrack!==null&&!menu.conta
 document.addEventListener('keydown',event=>{if(menuTrack!==null&&(event.key==='Escape'||event.key==='Tab')){if(event.key==='Escape')event.preventDefault();closeMenu(true);}});
 window.addEventListener('scroll',()=>closeMenu(),{passive:true});window.addEventListener('resize',()=>closeMenu());
 function allPositions(){return layout.getPositions().concat(blocks?.positions()||[]);}
-function audible(t){if(t>=names.length)return blocks?.audible(t-names.length)||false;const positions=layout.getPositions();return !blocks?.hasSolo()&& !positions[t].deleted&&!muted[t]&&(!solo.some((value,i)=>value&&!positions[i].deleted)||solo[t]);}
+function audible(t){if(t>=names.length)return blocks?.audible(t-names.length)||false;const positions=layout.getPositions();return (blocks?.activeAudible()??true)&&(!blocks?.hasSolo()||blocks?.activeSolo())&&!positions[t].deleted&&!muted[t]&&(!solo.some((value,i)=>value&&!positions[i].deleted)||solo[t]);}
 function updateGain(t){if(gains[t])gains[t].gain.setTargetAtTime(audible(t)?1:0,ctx.currentTime,.012);}
 function currentBeat(t){const state=playback[t];return state.running?(state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60+1e-9)%loopBeats[t]:state.beat;}
 function snapBeat(beat,t){return Math.min(Math.round(Math.max(0,beat)/4)*4,loopBeats[t])%loopBeats[t];}
@@ -536,7 +536,11 @@ function mixBlockSnapshot(data){
   mixes.forEach(mix=>{const input=mix.buffer.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]+=input[i%input.length];});return {buffer,beats};
 }
 blocks=window.createMusicBlocks({canvas:$('#canvas'),baseTempo,regions:()=>sweeps.read().filter(h=>h.looping),globalActive:index=>sweeps.trackActive(names.length+index),globalLoop:index=>sweeps.trackLooping(names.length+index),stopGlobal:index=>sweeps.stopTrack(names.length+index),positions:()=>layout.getPositions(),trackSolo:()=>solo.some((value,t)=>value&&!layout.getPositions()[t].deleted),audio:()=>({ctx,master,tempo}),valid:validBlock,
-  capture:()=>captureArrangement('Arrangement'),clear(){closeMenu();stop();const positions=layout.getPositions();positions.forEach(p=>p.deleted=true);layout.restore(positions);syncTrackPresence();},restore:data=>loadArrangement(data,true),newArrangement(){recordEdit();blockTransaction=true;try{resetArrangement(true);}finally{blockTransaction=false;recordEdit();}},begin(){recordEdit();blockTransaction=true;},end(){blockTransaction=false;recordEdit();},
+  applying:()=>rootRestoring,capture:()=>captureArrangement('Arrangement',false),clear(){closeMenu();stop();const positions=layout.getPositions();positions.forEach(p=>p.deleted=true);layout.restore(positions);syncTrackPresence();},restore:data=>loadArrangement(data,true),newArrangement(){recordEdit();blockTransaction=true;try{resetArrangement(true);}finally{blockTransaction=false;recordEdit();}},begin(){recordEdit();blockTransaction=true;},end(){blockTransaction=false;recordEdit();},
+  moveActive(dx,dy){const positions=layout.getPositions();positions.forEach(p=>{p.x=Math.max(0,p.x+dx);p.y=Math.max(0,p.y+dy);});layout.restore(positions);sweeps.translate(dx,dy);syncTrackPresence();},
+  activePlayback:()=>playback.some((p,t)=>!layout.getPositions()[t].deleted&&(p.running||p.starting||sweeps.trackActive(t))),
+  toggleActive(){const indices=names.map((_,t)=>t).filter(t=>!layout.getPositions()[t].deleted);if(indices.some(t=>playback[t].running||playback[t].starting)){indices.forEach(t=>{pauseTrack(t);playback[t].beat=0;sweeps.stopTrack(t);});render();}else void startTracks(indices);},
+  preview(data,area){return data.state.positions.map((p,t)=>{if(p.deleted)return '';const color=palette.find(c=>c.id===data.state.colors[t])?.hex||'#fafafa',vertical=p.vertical,length=vertical?p.height:p.width,ppb=length/p.beats;return `<div class="expanded-preview-track" style="left:${p.x-area.x}px;top:${p.y-area.y}px;width:${p.width}px;height:${p.height}px;background:${color}">${data.state.view[t]==='notation'&&(t<3||t===7||pitchPatterns[t])?trackNotation(t,vertical,length,vertical?p.width:p.height,0,p.beats,ppb):waveform(trackPeaks[t],vertical,p.width-6,p.height-4,0,ppb)}</div>`;}).join('');},
   async prepareAudio(){createAudio();await ctx.resume();await loadAudio();},mix:mixBlockSnapshot,
   startTime(){const earliest=ctx.currentTime+.06,barSeconds=240/tempo;if(barOrigin===null)barOrigin=earliest;return barOrigin+Math.max(0,Math.ceil((earliest-barOrigin)/barSeconds-1e-9))*barSeconds;},
   changed(){if(blocks)layout.setObstacles(()=>blocks.bounds());names.forEach((_,t)=>updateGain(t));render();},record:()=>recordEdit(),error:error=>message.textContent=error.message
@@ -547,14 +551,14 @@ const undoButton=$('#undo'),redoButton=$('#redo');
 editHistory=window.createMusicHistory({
   read:()=>({tempo,pitches:[...pitches],positions:layout.getPositions(),colors:[...trackColors],muted:[...muted],solo:[...solo],view:[...trackView],blocks:blocks?.snapshot()||[],regions:sweeps.read().filter(h=>h.looping).map(h=>({direction:h.direction,start:h.start,end:h.end,cross:h.cross,color:h.color,muted:h.muted,solo:h.solo}))}),
   apply(state){
-    stop();
+    rootRestoring=true;try{stop();
     if(state.tempo!==tempo)changeTempo(state.tempo);
     state.pitches.forEach((value,t)=>setTrackPitch(t,value));
     trackColors=[...state.colors];muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);
     if(state.view){trackView=[...state.view];try{localStorage.setItem(viewKey,JSON.stringify(trackView));}catch{}}
     blocks?.restore(state.blocks||[]);layout.restore(state.positions);names.forEach((_,t)=>applyTrackColor(t));
     try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
-    (state.regions||[]).forEach(r=>sweeps.add(r.direction==='down'?r.cross:r.start,r.direction==='down'?r.start:r.cross,r.direction==='down',true,false,r.end,r));syncTrackPresence();
+    (state.regions||[]).forEach(r=>sweeps.add(r.direction==='down'?r.cross:r.start,r.direction==='down'?r.start:r.cross,r.direction==='down',true,false,r.end,r));syncTrackPresence();}finally{rootRestoring=false;}blocks?.tick();
   },
   changed(state){undoButton.disabled=!state.undo;redoButton.disabled=!state.redo;}
 });
@@ -612,22 +616,22 @@ function refreshArrangementLibrary(){
   savedArrangements.forEach((data,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=data.name;loadSelect.appendChild(option);});
   const file=document.createElement('option');file.value='file';file.textContent='Open file…';loadSelect.appendChild(file);loadSelect.value='';
 }
-function captureArrangement(name){
-  return {format:'music-arrangement',version:1,name,state:{tempo,positions:layout.getPositions(),colors:[...trackColors],pitches:[...pitches],muted:[...muted],solo:[...solo],view:[...trackView],blocks:blocks?.snapshot()||[],regions:sweeps.read().filter(head=>head.looping).map(head=>({direction:head.direction,start:head.start,end:head.end,cross:head.cross,color:head.color,muted:head.muted,solo:head.solo}))}};
+function captureArrangement(name,includeBlocks=true){
+  return {format:'music-arrangement',version:1,name,state:{tempo,positions:layout.getPositions(),colors:[...trackColors],pitches:[...pitches],muted:[...muted],solo:[...solo],view:[...trackView],blocks:includeBlocks?blocks?.snapshot()||[]:[],regions:sweeps.read().filter(head=>head.looping).map(head=>({direction:head.direction,start:head.start,end:head.end,cross:head.cross,color:head.color,muted:head.muted,solo:head.solo}))}};
 }
 function rememberArrangement(data){
   const index=savedArrangements.findIndex(item=>item.name===data.name);if(index<0)savedArrangements.unshift(data);else savedArrangements[index]=data;savedArrangements=savedArrangements.slice(0,50);
   try{localStorage.setItem(arrangementKey,JSON.stringify(savedArrangements));}catch{}refreshArrangementLibrary();
 }
 function loadArrangement(data,preserveBlocks=false){
-  validArrangement(data);layout.cancelGestures();closeMenu();stop();const state=data.state;if(!preserveBlocks)blocks?.restore(state.blocks||[]);
+  validArrangement(data);rootRestoring=true;try{layout.cancelGestures();closeMenu();stop();const state=data.state;if(!preserveBlocks)blocks?.restore(state.blocks||[]);
   tempo=state.tempo;$('#tempo').value=tempo;
   pitches.splice(0,pitches.length,...state.pitches);pitchCache.fill(null);expandedArrangements.fill(null);
   muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);trackColors=[...state.colors];trackView=Array.isArray(state.view)?[...state.view]:names.map(()=>state.view);
   names.forEach((_,t)=>applyTrackColor(t));layout.restore(state.positions);
   try{localStorage.setItem(colorKey,JSON.stringify(trackColors));localStorage.setItem(pitchKey,JSON.stringify(pitches));localStorage.setItem(viewKey,JSON.stringify(trackView));}catch{}
   state.regions.forEach(r=>sweeps.add(r.direction==='down'?r.cross:r.start,r.direction==='down'?r.start:r.cross,r.direction==='down',true,false,r.end,r));
-  syncTrackPresence();recordEdit();message.textContent=`Loaded ${data.name}`;
+  syncTrackPresence();}finally{rootRestoring=false;}blocks?.tick();recordEdit();message.textContent=`Loaded ${data.name}`;
 }
 $('#save-arrangement').addEventListener('click',()=>{
   const name=window.prompt('Name this arrangement','My arrangement');if(!name?.trim())return;
