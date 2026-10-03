@@ -14,7 +14,7 @@ function waveform(peaks){
   return `<svg class="waveform" viewBox="0 0 128 40" preserveAspectRatio="none" aria-hidden="true">${peaks.map((p,i)=>{const h=Math.max(1,p/max*36);return `<rect x="${i*2}" y="${(40-h)/2}" width="1" height="${h}" fill="currentColor"/>`;}).join('')}</svg>`;
 }
 $('#ruler').innerHTML=Array.from({length:8},(_,bar)=>`<button data-bar="${bar}" aria-label="Move playhead to bar ${bar+1}">${bar+1}</button>`).join('');
-$('#tracks').innerHTML=names.map((name,t)=>`<div class="track-row" data-track="${t}"><div class="track-info"><span class="track-name">${name}</span><div class="track-controls"><button data-mute="${t}" aria-label="Mute ${name}" aria-pressed="false" title="Mute ${name}">M</button><button data-solo="${t}" aria-label="Solo ${name}" aria-pressed="false" title="Solo ${name}">S</button></div></div><div class="clips" data-timeline="${t}">${clips[t].map((clip,c)=>`<button class="clip" data-clip="${t},${c}" aria-label="${name}: ${clip.name}, bars ${c*2+1}–${c*2+2}. Click to move playhead." title="${clip.name}">${waveform(clip.peaks)}</button>`).join('')}</div></div>`).join('');
+$('#tracks').innerHTML=names.map((name,t)=>`<div class="track-row" data-track="${t}"><div class="track-info"><div class="track-name"><span class="track-label">${name}</span><div class="track-controls"><button data-mute="${t}" aria-label="Mute ${name}" aria-pressed="false" title="Mute ${name}">M</button><button data-solo="${t}" aria-label="Solo ${name}" aria-pressed="false" title="Solo ${name}">S</button></div></div></div><div class="clips" data-timeline="${t}">${clips[t].map((clip,c)=>`<button class="clip" data-clip="${t},${c}" aria-label="${name}: ${clip.name}, bars ${c*2+1}–${c*2+2}. Click to move playhead." title="${clip.name}">${waveform(clip.peaks)}</button>`).join('')}</div></div>`).join('');
 const rows=Array.from(document.querySelectorAll('.track-row'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 function audible(t){return !muted[t]&&(!solo.some(Boolean)||solo[t]);}
@@ -81,7 +81,7 @@ document.addEventListener('keydown',event=>{if(event.code==='Space'&&!/INPUT|BUT
 function updatePlayhead(){
   const beat=currentBeat();
   $('#position').textContent=`${Math.floor(beat/4)+1}.${Math.floor(beat%4)+1}.${Math.floor((beat%1)*4)+1}`;
-  $('#playhead').style.left=(120+beat/totalBeats*640)+'px';$('#playhead').classList.toggle('playing',running);
+  $('#playhead').style.left=(80+beat/totalBeats*640)+'px';$('#playhead').classList.toggle('playing',running);
   const segment=Math.floor(beat/8);
   cells.forEach((row,t)=>row.forEach((cell,c)=>cell.classList.toggle('active',running&&audible(t)&&c===segment)));
 }

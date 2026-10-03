@@ -1,0 +1,7 @@
+{
+  "name": "music",
+  "account_id": "ce6189d5ac975158991e207a3c4e1cd5",
+  "compatibility_date": "2026-10-03",
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "music.0001.dev", "custom_domain": true }]
+}

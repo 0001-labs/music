@@ -2,11 +2,11 @@
 
 A small open-source arrangement player prototype inspired by Ezo and Live. Each track is one 20px-high row, with an 80×20px name chip and a horizontal timeline. The waveforms are measured from real audio.
 
-[Play Music](https://music-grid.jaa90607124.chatgpt.site) · [Source code](https://github.com/0001-labs/music)
+[Play Music](https://music.0001.dev) · [Source code](https://github.com/0001-labs/music)
 
 Open the published site, or run `python3 -m http.server 8000 --directory dist` from this folder.
 
-Play runs through the eight-bar arrangement from left to right and loops back to the beginning. Click the timeline or bar ruler to seek. M mutes a track; S solos it. Tempo runs from 70–160 BPM. Space plays and pauses; Stop resets the position. All state stays in memory. The working surface contains the transport and arrangement, with a small Music by 0001 credit near the bottom of the page.
+Play runs through the eight-bar arrangement from left to right and loops back to the beginning. Click the timeline or bar ruler to seek. Hover a track name to reveal the 16×16px M/S split control inside its chip. M mutes a track; S solos it. Keyboard focus also reveals it, and touch devices keep it visible. Tempo runs from 70–160 BPM. Space plays and pauses; Stop resets the position. All state stays in memory. The working surface contains the transport and arrangement, with a small Music by 0001 credit near the bottom of the page.
 
 Includes 24 original synthesized WAV loops. The six tracks are Kick, Snare, Hats, Bass, Keys, and Air. Source tempo is 112 BPM, in A minor. Waveforms show measured amplitude peaks. Tempo changes alter pitch along with playback speed in this first prototype.
 
@@ -21,3 +21,5 @@ The plugin system is planned; this prototype does not load third-party code. See
 Code, original audio loops, and the Music box artwork are available under the [MIT license](LICENSE), copyright 2026 0001. No proprietary font files are bundled. The app uses system sans-serif fonts.
 
 This is a disposable first prototype for evaluating the grid interaction, not a production sequencer.
+
+Deploy with `wrangler deploy`. Cloudflare serves the static app and original audio at music.0001.dev.
