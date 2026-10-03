@@ -239,26 +239,21 @@ function trackNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb){
   if(track===7)return pianoNotation(vertical,timePx,pitchPx,startBeat,beatCount,ppb);
   return clipNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb);
 }
-const viewToggle=$('#track-view'),viewKey='music-track-view-v1';
-let trackView='waveform';
-try{if(localStorage.getItem(viewKey)==='notation')trackView='notation';}catch{}
-function renderViewToggle(){
-  const notation=trackView==='notation';
-  viewToggle.textContent=notation?'Waveform':'Notation';
-  viewToggle.setAttribute('aria-pressed',String(notation));
-  viewToggle.title=notation?'Switch to waveforms':'Switch to musical notation';
-  viewToggle.setAttribute('aria-label',viewToggle.title);
+const viewToggle=$('#track-view'),viewKey='music-track-views-v1';
+let trackView=names.map(()=>'waveform');
+try{const saved=JSON.parse(localStorage.getItem(viewKey));if(Array.isArray(saved)&&saved.length===names.length&&saved.every(v=>['waveform','notation'].includes(v)))trackView=saved;else if(localStorage.getItem('music-track-view-v1')==='notation')trackView.fill('notation');}catch{}
+function renderViewToggle(t){
+  const notation=trackView[t]==='notation';viewToggle.textContent=notation?'Show waveform':'Show notation';viewToggle.setAttribute('aria-pressed',String(notation));viewToggle.title=notation?'Show this track as a waveform':'Show notation for this track';viewToggle.setAttribute('aria-label',viewToggle.title);
 }
 viewToggle.addEventListener('click',()=>{
-  trackView=trackView==='waveform'?'notation':'waveform';
-  try{localStorage.setItem(viewKey,trackView);}catch{}
-  renderViewToggle();updatePlayhead();
+  if(menuTrack===null)return;const t=menuTrack;trackView[t]=trackView[t]==='waveform'?'notation':'waveform';
+  try{localStorage.setItem(viewKey,JSON.stringify(trackView));}catch{}
+  renderViewToggle(t);updatePlayhead();recordEdit();closeMenu(true);
 });
-renderViewToggle();
 const waveformSizes=Array(names.length).fill('');
 function updateWaveforms(sizes){
   sizes.forEach(({width,height,vertical,beats},t)=>{
-    const key=`${trackView},${width},${height},${vertical},${beats},${pitches[t]}`;if(waveformSizes[t]===key)return;
+    const key=`${trackView[t]},${width},${height},${vertical},${beats},${pitches[t]}`;if(waveformSizes[t]===key)return;
     waveformSizes[t]=key;
     const length=vertical?height:width,part=length/4,displayPixelsPerBeat=length/beats;
     const zoom=displayPixelsPerBeat/pixelsPerBeat,change=Math.round((zoom-1)*100),tag=zoomTags[t];
@@ -268,7 +263,7 @@ function updateWaveforms(sizes){
     rows[t].style.setProperty('--clip-span',8*displayPixelsPerBeat+'px');
     const clipWidth=vertical?width-6:part,clipHeight=vertical?part:height-4;
     cells[t].forEach((cell,c)=>{
-      cell.innerHTML=trackView==='notation'&&(t<3||t===7||pitchPatterns[t])?trackNotation(t,vertical,part,vertical?width:height,c*beats/4,beats/4,displayPixelsPerBeat):waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part,displayPixelsPerBeat);
+      cell.innerHTML=trackView[t]==='notation'&&(t<3||t===7||pitchPatterns[t])?trackNotation(t,vertical,part,vertical?width:height,c*beats/4,beats/4,displayPixelsPerBeat):waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part,displayPixelsPerBeat);
       cell.style.backgroundPosition=vertical?`0px ${-c*part}px`:`${-c*part}px 0px`;
       const clip=clips[t][Math.floor(c*part/(8*displayPixelsPerBeat))%4];
       cell.title=clip.name;cell.setAttribute('aria-label',`${names[t]}: ${clip.name}. Click to move playhead.`);
@@ -314,7 +309,7 @@ function closeMenu(restoreFocus=false){
   if(restoreFocus&&t!==null&&!layout.getPositions()[t].deleted)rows[t].querySelector('[data-track-play]').focus();
 }
 function openMenu(t,clientX,clientY){
-  menuTrack=t;orientationButton.textContent=layout.getPositions()[t].vertical?'Make horizontal':'Make vertical';
+  menuTrack=t;renderViewToggle(t);orientationButton.textContent=layout.getPositions()[t].vertical?'Make horizontal':'Make vertical';
   swatchButtons.forEach(button=>button.setAttribute('aria-checked',button.dataset.color===(trackColors[t]||'light-green')));
   const left=Math.max(0,Math.min(window.innerWidth-120,clientX)),top=Math.max(0,Math.min(window.innerHeight-100,clientY));
   menu.style.left=Math.floor((left+window.scrollX)/20)*20+'px';menu.style.top=Math.floor((top+window.scrollY)/20)*20+'px';
@@ -550,12 +545,13 @@ layout.setObstacles(()=>blocks.bounds());
 const compactButton=document.createElement('button');compactButton.textContent='Compact arrangement';compactButton.setAttribute('role','menuitem');menu.appendChild(compactButton);compactButton.addEventListener('click',()=>{closeMenu();blocks.compact();});
 const undoButton=$('#undo'),redoButton=$('#redo');
 editHistory=window.createMusicHistory({
-  read:()=>({tempo,pitches:[...pitches],positions:layout.getPositions(),colors:[...trackColors],muted:[...muted],solo:[...solo],blocks:blocks?.snapshot()||[],regions:sweeps.read().filter(h=>h.looping).map(h=>({direction:h.direction,start:h.start,end:h.end,cross:h.cross,color:h.color,muted:h.muted,solo:h.solo}))}),
+  read:()=>({tempo,pitches:[...pitches],positions:layout.getPositions(),colors:[...trackColors],muted:[...muted],solo:[...solo],view:[...trackView],blocks:blocks?.snapshot()||[],regions:sweeps.read().filter(h=>h.looping).map(h=>({direction:h.direction,start:h.start,end:h.end,cross:h.cross,color:h.color,muted:h.muted,solo:h.solo}))}),
   apply(state){
     stop();
     if(state.tempo!==tempo)changeTempo(state.tempo);
     state.pitches.forEach((value,t)=>setTrackPitch(t,value));
     trackColors=[...state.colors];muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);
+    if(state.view){trackView=[...state.view];try{localStorage.setItem(viewKey,JSON.stringify(trackView));}catch{}}
     blocks?.restore(state.blocks||[]);layout.restore(state.positions);names.forEach((_,t)=>applyTrackColor(t));
     try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
     (state.regions||[]).forEach(r=>sweeps.add(r.direction==='down'?r.cross:r.start,r.direction==='down'?r.start:r.cross,r.direction==='down',true,false,r.end,r));syncTrackPresence();
@@ -605,7 +601,7 @@ function validArrangement(data){
   if(!state.positions.every(p=>p&&[p.x,p.y,p.width,p.height].every(finite)&&p.width>=80&&p.height>=20&&typeof p.vertical==='boolean'&&typeof p.deleted==='boolean'&&Number.isInteger(p.beats)&&p.beats>=16&&p.beats<=2496&&p.beats%16===0))throw new Error('Invalid track positions.');
   const visible=state.positions.filter(p=>!p.deleted);if(visible.some((p,i)=>visible.slice(i+1).some(q=>p.x<q.x+q.width&&p.x+p.width>q.x&&p.y<q.y+q.height&&p.y+p.height>q.y)))throw new Error('Arrangement tracks overlap.');
   if(!Array.isArray(state.colors)||state.colors.length!==n||!state.colors.every(c=>c===null||palette.some(p=>p.id===c))||!Array.isArray(state.pitches)||state.pitches.length!==n||!state.pitches.every(p=>Number.isInteger(p)&&Math.abs(p)<=24))throw new Error('Invalid track settings.');
-  if(!['muted','solo'].every(key=>Array.isArray(state[key])&&state[key].length===n&&state[key].every(v=>typeof v==='boolean'))||!['waveform','notation'].includes(state.view))throw new Error('Invalid playback settings.');
+  if(!['muted','solo'].every(key=>Array.isArray(state[key])&&state[key].length===n&&state[key].every(v=>typeof v==='boolean'))||!(Array.isArray(state.view)?state.view.length===n&&state.view.every(v=>['waveform','notation'].includes(v)):['waveform','notation'].includes(state.view)))throw new Error('Invalid playback settings.');
   if(!Array.isArray(state.regions)||state.regions.length>32||!state.regions.every(r=>r&&['right','down'].includes(r.direction)&&[r.start,r.end,r.cross].every(finite)&&r.end>=r.start+80&&[r.muted,r.solo].every(v=>v===undefined||typeof v==='boolean')))throw new Error('Invalid loop regions.');
   if(state.blocks!==undefined&&(!Array.isArray(state.blocks)||state.blocks.length>64||!state.blocks.every(validBlock)))throw new Error('Invalid arrangement blocks.');
   return data;
@@ -617,7 +613,7 @@ function refreshArrangementLibrary(){
   const file=document.createElement('option');file.value='file';file.textContent='Open file…';loadSelect.appendChild(file);loadSelect.value='';
 }
 function captureArrangement(name){
-  return {format:'music-arrangement',version:1,name,state:{tempo,positions:layout.getPositions(),colors:[...trackColors],pitches:[...pitches],muted:[...muted],solo:[...solo],view:trackView,blocks:blocks?.snapshot()||[],regions:sweeps.read().filter(head=>head.looping).map(head=>({direction:head.direction,start:head.start,end:head.end,cross:head.cross,color:head.color,muted:head.muted,solo:head.solo}))}};
+  return {format:'music-arrangement',version:1,name,state:{tempo,positions:layout.getPositions(),colors:[...trackColors],pitches:[...pitches],muted:[...muted],solo:[...solo],view:[...trackView],blocks:blocks?.snapshot()||[],regions:sweeps.read().filter(head=>head.looping).map(head=>({direction:head.direction,start:head.start,end:head.end,cross:head.cross,color:head.color,muted:head.muted,solo:head.solo}))}};
 }
 function rememberArrangement(data){
   const index=savedArrangements.findIndex(item=>item.name===data.name);if(index<0)savedArrangements.unshift(data);else savedArrangements[index]=data;savedArrangements=savedArrangements.slice(0,50);
@@ -627,9 +623,9 @@ function loadArrangement(data,preserveBlocks=false){
   validArrangement(data);layout.cancelGestures();closeMenu();stop();const state=data.state;if(!preserveBlocks)blocks?.restore(state.blocks||[]);
   tempo=state.tempo;$('#tempo').value=tempo;
   pitches.splice(0,pitches.length,...state.pitches);pitchCache.fill(null);expandedArrangements.fill(null);
-  muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);trackColors=[...state.colors];trackView=state.view;
-  names.forEach((_,t)=>applyTrackColor(t));layout.restore(state.positions);renderViewToggle();
-  try{localStorage.setItem(colorKey,JSON.stringify(trackColors));localStorage.setItem(pitchKey,JSON.stringify(pitches));localStorage.setItem(viewKey,trackView);}catch{}
+  muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);trackColors=[...state.colors];trackView=Array.isArray(state.view)?[...state.view]:names.map(()=>state.view);
+  names.forEach((_,t)=>applyTrackColor(t));layout.restore(state.positions);
+  try{localStorage.setItem(colorKey,JSON.stringify(trackColors));localStorage.setItem(pitchKey,JSON.stringify(pitches));localStorage.setItem(viewKey,JSON.stringify(trackView));}catch{}
   state.regions.forEach(r=>sweeps.add(r.direction==='down'?r.cross:r.start,r.direction==='down'?r.start:r.cross,r.direction==='down',true,false,r.end,r));
   syncTrackPresence();recordEdit();message.textContent=`Loaded ${data.name}`;
 }
