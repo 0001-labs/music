@@ -99,6 +99,8 @@ function reverbImpulse(){
   return buffer;
 }
 const play=$('#play'),message=$('#message');
+// Browsers, Safari included, will not load audio from a page opened straight off the disk; it has to be served.
+const fromDisk=location.protocol==='file:',fromDiskMessage='Open Music through serve.command in the Music folder: this page was opened from a file, and the browser blocks its audio.';
 function waveform(peaks,width=160,height=16,startPixel=0,displayPixelsPerBeat=pixelsPerBeat){
   const first=(2-startPixel%2)%2,count=Math.max(1,Math.ceil((width-first)/2)),max=Math.max(...peaks,.001);
   const samplesPerPixel=peaks.length/(totalBeats*displayPixelsPerBeat);
@@ -308,6 +310,7 @@ function createAudio(){
 // Audio files load a few at a time and retry, so one dropped request does not leave a clip silent.
 let audioSlots=6;const audioQueue=[];
 async function fetchAudio(url){
+  if(fromDisk)throw new Error(fromDiskMessage);
   if(audioSlots<=0)await new Promise(resolve=>audioQueue.push(resolve));else audioSlots--;
   try{
     for(let attempt=0;;attempt++){
@@ -877,3 +880,4 @@ function fitToBoard(){
 fitToBoard();
 if(firstVisit&&window.MUSIC_DEMO)loadDemo();
 render();animate();
+if(fromDisk)message.textContent=fromDiskMessage;
