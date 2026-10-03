@@ -132,7 +132,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
     if(canvas.hasPointerCapture(state.id))canvas.releasePointerCapture(state.id);
   }
   document.addEventListener('pointerdown',event=>{
-    if(event.button!==0||!event.isPrimary||event.target.closest('.track-surface,.transport,.context-menu,input,textarea,select,[contenteditable="true"]'))return;
+    if(event.button!==0||!event.isPrimary||event.target.closest('.track-surface,.transport,.context-menu,.canvas-playhead,input,textarea,select,[contenteditable="true"]'))return;
     finish(true);
     marquee={id:event.pointerId,startX:event.clientX+window.scrollX,startY:event.clientY+window.scrollY,clientX:event.clientX,clientY:event.clientY,before:new Set(selected),additive:event.shiftKey||event.metaKey||event.ctrlKey,active:false};
     if(!marquee.additive){selected.clear();showSelection();}
@@ -157,7 +157,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
   document.addEventListener('pointerup',event=>{if(marquee&&event.pointerId===marquee.id)finishMarquee();if(drag&&event.pointerId===drag.id)finish();});
   document.addEventListener('pointercancel',event=>{if(marquee&&event.pointerId===marquee.id)finishMarquee(true);if(drag&&event.pointerId===drag.id)finish(true);});
   document.addEventListener('keydown',event=>{
-    if(event.defaultPrevented||event.target?.closest?.('input,textarea,select,[contenteditable="true"],#track-menu,[data-resize]'))return;
+    if(event.defaultPrevented||event.target?.closest?.('input,textarea,select,[contenteditable="true"],#track-menu,.canvas-playhead,[data-resize]'))return;
     if(event.key==='Escape'){
       if(marquee){event.preventDefault();finishMarquee(true);}
       else if(drag){event.preventDefault();finish(true);}
