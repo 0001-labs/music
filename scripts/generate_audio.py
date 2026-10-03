@@ -22,10 +22,11 @@ names = [
  ['Closed hats','Open hats','Shaker','Skip hats'],
  ['Root','Walk','Low pulse','Octaves'],
  ['Soft chords','Little steps','Glass','Long chords'],
- ['Room','Drift','Rain','Horizon']
+ ['Room','Drift','Rain','Horizon'],
+ ['Soft pulse','Steps','Echo','Rise']
 ]
 clips = []
-for track in range(6):
+for track in range(len(names)):
     row=[]
     for variant in range(4):
         buf=[0.0]*N
@@ -60,11 +61,16 @@ for track in range(6):
                     for step in range(8):
                         f=note(chord[(step+variant)%4]+(12 if variant==2 else 0))
                         add(buf,(bar*4+step*.5)*BEAT,BEAT*.8,lambda t,f=f: math.sin(2*math.pi*f*t)*min(1,t/.007)*math.exp(-t*8),.2)
-        else:
+        elif track==5:
             for i in range(N):
                 t=i/SR
                 envelope=math.sin(math.pi*i/N)**2
                 buf[i]=envelope*(.022*math.sin(2*math.pi*note([69,72,76,67][variant])*t)+.012*math.sin(2*math.pi*note(81)*t)+random.uniform(-.01,.01))
+        else:
+            patterns=[[0,2,4,6],[0,.75,2,3.5,4,4.75,6,7.5],[0,1.5,3,4,5.5,7],[0,1,2,3,4,5,6,7]]
+            for step,b in enumerate(patterns[variant]):
+                freq=note([69,72,76,79][(step+variant)%4])
+                add(buf,b*BEAT,.34,lambda t,f=freq: (math.sin(2*math.pi*f*t)+.22*math.sin(2*math.pi*f*2*t))*min(1,t/.008)*math.exp(-t*15),.13)
         # A tiny fade keeps loop boundaries and transport changes clean.
         for i in range(160):
             buf[i]*=i/160
