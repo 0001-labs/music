@@ -47,3 +47,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .reset-button{height:20px;width:40px;padding:0;line-height:20px;background:#eee;font-size:12px}.reset-button:hover{background:#ddd}
 
 .arrangement-button{height:20px;width:20px;padding:0;line-height:20px;background:var(--ink);color:white;font-size:9px}.arrangement-button:hover{background:#444}
+
+.canvas-playhead-track[hidden]{display:none}
