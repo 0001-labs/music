@@ -79,3 +79,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 #undo[hidden],#redo[hidden],#play[hidden],#play-arrangement[hidden],#stop[hidden]{display:none}#track-menu #track-view{width:120px;text-align:left;padding:0 4px}
 
 .transport{display:none}
+
+.music-header{position:fixed;top:0;left:0;right:0;z-index:1000;height:20px;line-height:20px;padding:0 4px;background:#1e1e1e;color:#fff;font-size:14px}
