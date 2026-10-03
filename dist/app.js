@@ -5,15 +5,6 @@ const names=['Kick','Snare','Hats','Bass','Keys','Air','Pulse'];
 const muted=Array(names.length).fill(false),solo=Array(names.length).fill(false);
 const baseTempo=112,totalBeats=32;
 const $=selector=>document.querySelector(selector);
-function alignWorkspace(){
-  const unit=20,viewport=document.documentElement.clientWidth;
-  const width=Math.min(640,Math.max(unit,Math.floor((viewport-2*unit)/unit)*unit));
-  const left=Math.max(0,Math.round((viewport-width)/(2*unit))*unit);
-  document.documentElement.style.setProperty('--workspace-width',width+'px');
-  document.documentElement.style.setProperty('--workspace-left',left+'px');
-}
-alignWorkspace();
-window.addEventListener('resize',alignWorkspace);
 const playback=names.map(()=>({running:false,starting:false,beat:0,startedAt:0,epoch:0,source:null}));
 let tempo=112,ctx,master,analyser,gains=[],arrangements,loading;
 const play=$('#play'),message=$('#message');
@@ -36,6 +27,7 @@ $('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-t
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
+const layout=window.createMusicLayout(rows);
 function audible(t){return !muted[t]&&(!solo.some(Boolean)||solo[t]);}
 function updateGain(t){if(gains[t])gains[t].gain.setTargetAtTime(audible(t)?1:0,ctx.currentTime,.012);}
 function currentBeat(t){const state=playback[t];return state.running?(state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60)%totalBeats:state.beat;}
@@ -146,10 +138,10 @@ function updatePlayhead(){
     cells[t].forEach((cell,c)=>cell.classList.toggle('active',active&&c===segment));
   });
 }
-function animate(){updatePlayhead();requestAnimationFrame(animate);}
+function animate(){layout.tick();updatePlayhead();requestAnimationFrame(animate);}
 if(document.modelContext?.registerTool){
   const lifecycle=new AbortController();
-  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,bars:8,tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),muted:muted[t],solo:solo[t]}))};}};
+  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,bars:8,tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),muted:muted[t],solo:solo[t],position:layout.getPositions()[t]}))};}};
   try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }
