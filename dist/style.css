@@ -77,3 +77,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .arrangement-block-menu{width:160px}.arrangement-block-menu button[hidden]{display:none}
 
 #undo[hidden],#redo[hidden],#play[hidden],#play-arrangement[hidden],#stop[hidden]{display:none}#track-menu #track-view{width:120px;text-align:left;padding:0 4px}
+
+.transport{display:none}
