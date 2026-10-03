@@ -442,14 +442,20 @@ document.querySelectorAll('[data-clip]').forEach(button=>button.addEventListener
 document.querySelectorAll('[data-mute]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.mute);muted[t]=!muted[t];updateGain(t);render();editHistory.record();}));
 document.querySelectorAll('[data-solo]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.solo);solo[t]=!solo[t];names.forEach((_,i)=>updateGain(i));render();editHistory.record();}));
 play.addEventListener('click',()=>{
-  if(sweeps.read().some(head=>!head.looping)){stop();void startTracks(names.map((_,t)=>t));}
-  else toggleAll();
+  const active=playback.some(state=>state.running||state.starting)||sweeps.read().some(head=>head.looping&&(head.playing||head.loading));
+  if(active){
+    pausedTracks=names.map((_,t)=>t).filter(t=>playback[t].running||playback[t].starting);
+    sweeps.pause(true);names.forEach((_,t)=>pauseTrack(t));render();
+  }else{
+    const pausedLoops=sweeps.read().some(head=>head.looping);
+    sweeps.resume(true);void startTracks(pausedTracks.length?pausedTracks:pausedLoops?[]:names.map((_,t)=>t));pausedTracks=[];
+  }
 });
 $('#play-arrangement').addEventListener('click',()=>{
   const sequence=sweeps.read().find(head=>!head.looping);
-  if(sequence&&(sequence.playing||sequence.loading)){pause();return;}
-  if(sequence){sweeps.resume();return;}
-  stop();const positions=layout.getPositions().filter(p=>!p.deleted);if(!positions.length)return;
+  if(sequence&&(sequence.playing||sequence.loading)){sweeps.pause(false);render();return;}
+  if(sequence){sweeps.resume(false);return;}
+  const positions=layout.getPositions().filter(p=>!p.deleted);if(!positions.length)return;
   const first=0,top=Math.max(0,Math.min(...positions.map(p=>p.y))-window.musicGrid.placementStep);
   void sweeps.add(first,top,false,false);
 });

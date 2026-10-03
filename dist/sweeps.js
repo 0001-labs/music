@@ -92,8 +92,8 @@ window.createMusicSweeps=function(options){
     element.appendChild(progress);element.appendChild(stop);head.element=element;head.cursor=cursor;head.progress=progress;head.stopButton=stop;
     heads.push(head);options.canvas.appendChild(element);options.canvas.appendChild(cursor);paint(head,options.positions());void launch(head);return head;
   }
-  function pause(){heads.forEach(head=>{if(head.running||head.loading){head.position=coordinate(head);head.beat=timelineBeat(head);head.running=false;head.loading=false;head.paused=true;head.epoch++;cancelSource(head);paint(head,options.positions());}});}
-  function resume(){heads.filter(head=>head.paused).forEach(head=>void launch(head));}
+  function pause(looping){heads.filter(head=>looping===undefined||head.looping===looping).forEach(head=>{if(head.running||head.loading){head.position=coordinate(head);head.beat=timelineBeat(head);head.running=false;head.loading=false;head.paused=true;head.epoch++;cancelSource(head);paint(head,options.positions());}});}
+  function resume(looping){heads.filter(head=>head.paused&&(looping===undefined||head.looping===looping)).forEach(head=>void launch(head));}
   function stop(){heads.slice().forEach(remove);}
   function tick(positions=options.positions()){
     heads.slice().forEach(head=>{if(head.running&&!head.looping&&coordinate(head)>=head.end){remove(head);options.changed();return;}if(head.running&&head.signature!==signature(head,positions))rescheduleHead(head,positions);paint(head,positions);});
