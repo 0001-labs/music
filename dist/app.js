@@ -525,7 +525,7 @@ function syncTrackPresence(){
   render();
 }
 function validBlock(record){
-  if(!record||typeof record.id!=='string'||typeof record.name!=='string'||record.name.length>120||![record.x,record.y,record.width,record.height,record.beats].every(Number.isFinite)||record.x<0||record.y<0||record.width<80||record.height!==80||![record.muted,record.solo,record.opened].every(v=>typeof v==='boolean')||record.beats<1||record.beats>10000||record.data?.state?.blocks?.length)return false;
+  if(!record||typeof record.id!=='string'||typeof record.name!=='string'||record.name.length>120||![record.x,record.y,record.width,record.height,record.beats].every(Number.isFinite)||record.x<0||record.y<0||record.width<80||record.height<20||record.height>2000||![record.muted,record.solo,record.opened].every(v=>typeof v==='boolean')||record.beats<1||record.beats>10000||record.data?.state?.blocks?.length)return false;
   try{validArrangement(record.data);return true;}catch{return false;}
 }
 function mixBlockSnapshot(data){
@@ -541,7 +541,7 @@ blocks=window.createMusicBlocks({canvas:$('#canvas'),baseTempo,regions:()=>sweep
   activePlayback:()=>playback.some((p,t)=>!layout.getPositions()[t].deleted&&(p.running||p.starting||sweeps.trackActive(t))),
   toggleActive(){const indices=names.map((_,t)=>t).filter(t=>!layout.getPositions()[t].deleted);if(indices.some(t=>playback[t].running||playback[t].starting)){indices.forEach(t=>{pauseTrack(t);playback[t].beat=0;sweeps.stopTrack(t);});render();}else void startTracks(indices);},
   preview(data,area){return data.state.positions.map((p,t)=>{if(p.deleted)return '';const color=palette.find(c=>c.id===data.state.colors[t])?.hex||'#fafafa',vertical=p.vertical,length=vertical?p.height:p.width,ppb=length/p.beats;return `<div class="expanded-preview-track" style="left:${p.x-area.x}px;top:${p.y-area.y}px;width:${p.width}px;height:${p.height}px;background:${color}">${data.state.view[t]==='notation'&&(t<3||t===7||pitchPatterns[t])?trackNotation(t,vertical,length,vertical?p.width:p.height,0,p.beats,ppb):waveform(trackPeaks[t],vertical,p.width-6,p.height-4,0,ppb)}</div>`;}).join('');},
-  async prepareAudio(){createAudio();await ctx.resume();await loadAudio();},mix:mixBlockSnapshot,
+  async prepareAudio(){createAudio();await loadAudio();},resumeAudio:async()=>{createAudio();await ctx.resume();},resized(){sweeps.reschedule();layout.setObstacles(()=>blocks.bounds());render();},mix:mixBlockSnapshot,
   startTime(){const earliest=ctx.currentTime+.06,barSeconds=240/tempo;if(barOrigin===null)barOrigin=earliest;return barOrigin+Math.max(0,Math.ceil((earliest-barOrigin)/barSeconds-1e-9))*barSeconds;},
   changed(){if(blocks)layout.setObstacles(()=>blocks.bounds());names.forEach((_,t)=>updateGain(t));render();},record:()=>recordEdit(),error:error=>message.textContent=error.message
 });
