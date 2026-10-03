@@ -324,8 +324,8 @@ function render(){
   play.title=active?'Pause loops':'Play loops';
   const arrangementActive=sweeps.read().some(head=>!head.looping&&(head.playing||head.loading));
   const arrangementButton=$('#play-arrangement');arrangementButton.textContent=arrangementActive?'Ⅱ':'▶';
-  arrangementButton.setAttribute('aria-label',arrangementActive?'Pause arrangement':'Play arrangement from first track to last');
-  arrangementButton.title=arrangementActive?'Pause arrangement':'Play arrangement once';
+  arrangementButton.setAttribute('aria-label',arrangementActive?'Pause arrangement':'Play arrangement from 0.0 to the last track');
+  arrangementButton.title=arrangementActive?'Pause arrangement':'Play arrangement once from 0.0';
   rows.forEach((row,t)=>{
     row.classList.toggle('silent',!audible(t));
     row.classList.toggle('has-track-state',muted[t]||solo[t]);
@@ -450,7 +450,7 @@ $('#play-arrangement').addEventListener('click',()=>{
   if(sequence&&(sequence.playing||sequence.loading)){pause();return;}
   if(sequence){sweeps.resume();return;}
   stop();const positions=layout.getPositions().filter(p=>!p.deleted);if(!positions.length)return;
-  const first=Math.min(...positions.map(p=>p.x)),top=Math.max(0,Math.min(...positions.map(p=>p.y))-window.musicGrid.placementStep);
+  const first=0,top=Math.max(0,Math.min(...positions.map(p=>p.y))-window.musicGrid.placementStep);
   void sweeps.add(first,top,false,false);
 });
 $('#stop').addEventListener('click',stop);
