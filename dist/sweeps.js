@@ -11,10 +11,10 @@ window.createMusicSweeps=function(options){
     return head.origin+((head.position-head.origin+Math.max(0,ctx.currentTime-head.startedAt)*speed)%span);
   }
   function cancelSource(head){if(head.source){try{head.source.stop();}catch{}head.source=null;}}
-  function geometry(head,positions){return positions.map((p,t)=>({...axis(p,head.vertical),t,vertical:p.vertical,beats:p.beats})).filter(p=>p.vertical!==head.vertical||p.end>head.origin);}
+  function geometry(head,positions){return positions.map((p,t)=>({...axis(p,head.vertical),t,vertical:p.vertical,beats:p.beats,deleted:p.deleted})).filter(p=>!p.deleted&&(p.vertical!==head.vertical||p.end>head.origin));}
   function signature(head,positions){return JSON.stringify([positions,positions.map((_,t)=>options.audible(t)),Array.from(head.skipped)]);}
   function paint(head,positions){
-    const tracks=positions.map(p=>axis(p,head.vertical));
+    const tracks=positions.filter(p=>!p.deleted).map(p=>axis(p,head.vertical));
     const first=Math.min(head.cross,...tracks.map(p=>p.cross)),last=Math.max(head.cross+20,...tracks.map(p=>p.cross+p.span));
     const position=Math.floor(coordinate(head)),length=head.end-head.origin;
     Object.assign(head.element.style,head.vertical?{left:head.cross+'px',top:head.origin+'px',width:'20px',height:length+'px'}:{left:head.origin+'px',top:head.cross+'px',width:length+'px',height:'20px'});

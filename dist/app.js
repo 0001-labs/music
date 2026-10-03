@@ -71,11 +71,12 @@ const loopBoundaries=rows.map(row=>{
 const sweepTrackHeads=rows.map(row=>{
   const layer=document.createElement('div');layer.className='sweep-track-heads';layer.setAttribute('aria-hidden','true');row.appendChild(layer);return layer;
 });
+let editHistory=null;
 const layout=window.createMusicLayout(rows,(t,vertical)=>{
   cells[t].forEach(cell=>cell.classList.toggle('vertical-clip',vertical));
   playheads[t].classList.toggle('vertical-playhead',vertical);
   playheads[t].style.left='0px';playheads[t].style.top='0px';
-});
+},()=>{if(editHistory&&!editHistory.applying){editHistory.record();syncTrackPresence();}});
 const sweeps=window.createMusicSweeps({
   canvas:$('#canvas'),positions:()=>layout.getPositions(),baseTempo,totalBeats,audible,
   audio:()=>({ctx,tempo,pixelsPerBeat,arrangements,gains,master}),
@@ -266,21 +267,22 @@ function updateWaveforms(sizes){
 }
 function tint(hex,amount){return '#'+[1,3,5].map(index=>Math.round(255*(1-amount)+parseInt(hex.slice(index,index+2),16)*amount).toString(16).padStart(2,'0')).join('');}
 function applyTrackColor(t){
-  const color=palette.find(color=>color.id===trackColors[t]);if(!color)return;
+  const color=palette.find(color=>color.id===trackColors[t]);
+  if(!color){['--track-color','--track-active-ink','--track-sweep-ink','--track-rest','--track-alt','--track-hover'].forEach(key=>rows[t].style.setProperty(key,''));return;}
   const ink=color.id==='blue'?'#ffffff':'#1e1e1e';
   const values={'--track-color':color.hex,'--track-active-ink':ink,'--track-sweep-ink':color.id==='blue'?'#ffffff':'#594dff','--track-rest':tint(color.hex,.12),'--track-alt':tint(color.hex,.18),'--track-hover':tint(color.hex,.3)};
   Object.entries(values).forEach(([key,value])=>rows[t].style.setProperty(key,value));
 }
 rows.forEach((_,t)=>applyTrackColor(t));
-const menu=$('#track-menu'),orientationButton=$('#orientation');
+const menu=$('#track-menu'),orientationButton=$('#orientation'),deleteButton=$('#delete-track');
 $('#track-colors').innerHTML=palette.map(color=>`<button class="color-swatch" data-color="${color.id}" role="menuitemradio" aria-checked="false" aria-label="${color.name}" title="${color.name}" style="--swatch-ink:${color.id==='blue'?'#fff':'#1e1e1e'}"><span style="background:${color.hex}" aria-hidden="true"></span></button>`).join('');
 const swatchButtons=Array.from(menu.querySelectorAll('[data-color]'));
 swatchButtons.forEach(button=>button.addEventListener('click',()=>{
   if(menuTrack===null)return;trackColors[menuTrack]=button.dataset.color;applyTrackColor(menuTrack);
   try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
-  closeMenu(true);
+  editHistory.record();closeMenu(true);
 }));
-const menuItems=[orientationButton,...swatchButtons];
+const menuItems=[orientationButton,deleteButton,...swatchButtons];
 menu.addEventListener('keydown',event=>{
   if(!['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
   event.preventDefault();const index=Math.max(0,menuItems.indexOf(document.activeElement));
@@ -290,12 +292,12 @@ menu.addEventListener('keydown',event=>{
 let menuTrack=null;
 function closeMenu(restoreFocus=false){
   const t=menuTrack;menu.hidden=true;menuTrack=null;
-  if(restoreFocus&&t!==null)rows[t].querySelector('[data-track-play]').focus();
+  if(restoreFocus&&t!==null&&!layout.getPositions()[t].deleted)rows[t].querySelector('[data-track-play]').focus();
 }
 function openMenu(t,clientX,clientY){
   menuTrack=t;orientationButton.textContent=layout.getPositions()[t].vertical?'Make horizontal':'Make vertical';
   swatchButtons.forEach(button=>button.setAttribute('aria-checked',button.dataset.color===(trackColors[t]||'light-green')));
-  const left=Math.max(0,Math.min(window.innerWidth-120,clientX)),top=Math.max(0,Math.min(window.innerHeight-80,clientY));
+  const left=Math.max(0,Math.min(window.innerWidth-120,clientX)),top=Math.max(0,Math.min(window.innerHeight-100,clientY));
   menu.style.left=Math.floor((left+window.scrollX)/20)*20+'px';menu.style.top=Math.floor((top+window.scrollY)/20)*20+'px';
   menu.hidden=false;orientationButton.focus();
 }
@@ -310,7 +312,7 @@ orientationButton.addEventListener('click',()=>{if(menuTrack!==null){layout.togg
 document.addEventListener('pointerdown',event=>{if(menuTrack!==null&&!menu.contains(event.target))closeMenu();});
 document.addEventListener('keydown',event=>{if(menuTrack!==null&&(event.key==='Escape'||event.key==='Tab')){if(event.key==='Escape')event.preventDefault();closeMenu(true);}});
 window.addEventListener('scroll',()=>closeMenu(),{passive:true});window.addEventListener('resize',()=>closeMenu());
-function audible(t){return !muted[t]&&(!solo.some(Boolean)||solo[t]);}
+function audible(t){const positions=layout.getPositions();return !positions[t].deleted&&!muted[t]&&(!solo.some((value,i)=>value&&!positions[i].deleted)||solo[t]);}
 function updateGain(t){if(gains[t])gains[t].gain.setTargetAtTime(audible(t)?1:0,ctx.currentTime,.012);}
 function currentBeat(t){const state=playback[t];return state.running?(state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60+1e-9)%loopBeats[t]:state.beat;}
 function snapBeat(beat,t){return Math.min(Math.round(Math.max(0,beat)/4)*4,loopBeats[t])%loopBeats[t];}
@@ -379,7 +381,7 @@ function resizeLoop(t,beats){
   }else state.beat=beat;
 }
 async function startTracks(indices){
-  const pending=indices.filter(t=>!playback[t].running&&!playback[t].starting).map(t=>{
+  const pending=indices.filter(t=>!layout.getPositions()[t].deleted&&!playback[t].running&&!playback[t].starting).map(t=>{
     const state=playback[t];state.starting=true;return {t,token:++state.epoch};
   });
   if(!pending.length)return;
@@ -432,8 +434,8 @@ document.querySelectorAll('[data-clip]').forEach(button=>button.addEventListener
   const pixel=event.detail===0?c*length/4:Math.max(0,Math.min(length,vertical?event.clientY-rect.top:event.clientX-rect.left));
   seekTrack(t,pixel/length*position.beats);
 }));
-document.querySelectorAll('[data-mute]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.mute);muted[t]=!muted[t];updateGain(t);render();}));
-document.querySelectorAll('[data-solo]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.solo);solo[t]=!solo[t];names.forEach((_,i)=>updateGain(i));render();}));
+document.querySelectorAll('[data-mute]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.mute);muted[t]=!muted[t];updateGain(t);render();editHistory.record();}));
+document.querySelectorAll('[data-solo]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.solo);solo[t]=!solo[t];names.forEach((_,i)=>updateGain(i));render();editHistory.record();}));
 play.addEventListener('click',toggleAll);$('#stop').addEventListener('click',stop);
 $('#tempo').addEventListener('change',event=>{
   const value=Number(event.target.value);if(!Number.isFinite(value)||value<70||value>160){event.target.value=tempo;return;}
@@ -455,8 +457,42 @@ function updatePlayhead(){
 function animate(){layout.tick();updatePlayhead();requestAnimationFrame(animate);}
 if(document.modelContext?.registerTool){
   const lifecycle=new AbortController();
-  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,pixelsPerBeat,canvasPlayheads:sweeps.read(),tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),bars:loopBeats[t]/4,muted:muted[t],solo:solo[t],color:trackColors[t]||'light-green',position:layout.getPositions()[t]}))};}};
+  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,pixelsPerBeat,canvasPlayheads:sweeps.read(),tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),bars:loopBeats[t]/4,muted:muted[t],solo:solo[t],color:trackColors[t]||'light-green',position:layout.getPositions()[t]})).filter(track=>!track.position.deleted)};}};
   try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }
+function syncTrackPresence(){
+  layout.getPositions().forEach((p,t)=>{
+    if(p.deleted){if(playback[t].running||playback[t].starting)pauseTrack(t);playback[t].beat=0;}
+    updateGain(t);
+  });
+  render();
+}
+const undoButton=$('#undo'),redoButton=$('#redo');
+editHistory=window.createMusicHistory({
+  read:()=>({positions:layout.getPositions(),colors:[...trackColors],muted:[...muted],solo:[...solo]}),
+  apply(state){
+    trackColors=[...state.colors];muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);
+    layout.restore(state.positions);names.forEach((_,t)=>applyTrackColor(t));
+    try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
+    syncTrackPresence();
+  },
+  changed(state){undoButton.disabled=!state.undo;redoButton.disabled=!state.redo;}
+});
+function undoEdits(){layout.cancelGestures();closeMenu();editHistory.undo();}
+function redoEdits(){layout.cancelGestures();closeMenu();editHistory.redo();}
+function deleteSelectedTracks(target=null){
+  const selection=layout.getSelection(),indices=target===null?selection:selection.includes(target)?selection:[target];
+  closeMenu();layout.deleteTracks(indices);$('#canvas').focus();
+}
+undoButton.addEventListener('click',undoEdits);redoButton.addEventListener('click',redoEdits);
+deleteButton.addEventListener('click',()=>{if(menuTrack!==null)deleteSelectedTracks(menuTrack);});
+document.addEventListener('keydown',event=>{
+  if(event.defaultPrevented||event.target?.closest?.('input,textarea,select,[contenteditable="true"]'))return;
+  const key=event.key.toLowerCase(),command=(event.metaKey||event.ctrlKey)&&!event.altKey;
+  if(command&&(key==='z'||key==='y')){event.preventDefault();if(key==='y'||event.shiftKey)redoEdits();else undoEdits();}
+  else if(!event.metaKey&&!event.ctrlKey&&!event.altKey&&(event.key==='Delete'||event.key==='Backspace')){
+    if(menuTrack!==null||layout.getSelection().length){event.preventDefault();deleteSelectedTracks(menuTrack);}
+  }
+});
 render();animate();

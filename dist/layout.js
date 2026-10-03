@@ -1,6 +1,6 @@
 'use strict';
 window.musicGrid={unit:20,placementStep:80};
-window.createMusicLayout=function(rows,onOrientationChange){
+window.createMusicLayout=function(rows,onOrientationChange,onCommit){
   const {unit,placementStep}=window.musicGrid,key='music-grid-layout-four-bar-v1',canvas=document.querySelector('#canvas');
   const snap=value=>Math.max(0,Math.round(value/unit)*unit);
   const snapPosition=value=>Math.max(0,Math.round(value/placementStep)*placementStep);
@@ -10,7 +10,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
   const minimumSize=vertical=>vertical?{width:80,height:160}:{width:160,height:20};
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
-  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
+  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),deleted:false,beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
   let migrated=false;
   try{
     const saved=JSON.parse(localStorage.getItem(key));
@@ -22,7 +22,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
       const width=dimension('width',p.width),height=dimension('height',p.height);
       const x=snapPosition(p.x),y=snapPosition(p.y);
       if(x!==p.x||y!==p.y)migrated=true;
-      return {x,y,vertical,width,height,beats:hasBeats?p.beats:(vertical?height:width)/40};
+      return {x,y,vertical,width,height,deleted:p.deleted===true,beats:hasBeats?p.beats:(vertical?height:width)/40};
     });
     if(migrated&&Array.isArray(saved)&&saved.length>0&&saved.length<rows.length)positions.slice(saved.length).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,saved.length+t).map(item=>item.y+item.height))/placementStep)*placementStep;});
   }catch{}
@@ -30,15 +30,15 @@ window.createMusicLayout=function(rows,onOrientationChange){
   const selected=new Set(),selectionBox=document.querySelector('#selection-marquee');
   function showSelection(){rows.forEach((row,t)=>row.classList.toggle('selected',selected.has(t)));}
   function selectOnly(t){selected.clear();selected.add(t);showSelection();}
-  function save(){try{localStorage.setItem(key,JSON.stringify(positions));}catch{}}
+  function save(){try{localStorage.setItem(key,JSON.stringify(positions));}catch{}onCommit?.();}
   function resizeCanvas(){
-    const width=Math.max(viewport.clientWidth,...positions.map((p,t)=>p.x+p.width+40));
-    const height=Math.max(viewport.clientHeight,...positions.map((p,t)=>p.y+p.height+40));
+    const width=Math.max(viewport.clientWidth,...positions.filter(p=>!p.deleted).map(p=>p.x+p.width+40));
+    const height=Math.max(viewport.clientHeight,...positions.filter(p=>!p.deleted).map(p=>p.y+p.height+40));
     canvas.style.width=Math.ceil(width/unit)*unit+'px';
     canvas.style.height=Math.ceil(height/unit)*unit+'px';
   }
   function intersects(a,b){return a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;}
-  function overlaps(t,next,limit=positions.length){return positions.some((p,i)=>i!==t&&i<limit&&intersects(next,p));}
+  function overlaps(t,next,limit=positions.length){return positions.some((p,i)=>i!==t&&i<limit&&!p.deleted&&intersects(next,p));}
   function freePosition(position,occupied){
     const xs=new Set([position.x,0]),ys=new Set([position.y,0]);
     occupied.forEach(p=>{
@@ -49,11 +49,12 @@ window.createMusicLayout=function(rows,onOrientationChange){
     candidates.sort((a,b)=>(a.x-position.x)**2+(a.y-position.y)**2-((b.x-position.x)**2+(b.y-position.y)**2)||a.y-b.y||a.x-b.x);
     return candidates.find(p=>occupied.every(other=>!intersects(p,other)));
   }
-  function nearestFree(t,position,limit=positions.length){return freePosition(position,positions.filter((_,i)=>i!==t&&i<limit));}
+  function nearestFree(t,position,limit=positions.length){return freePosition(position,positions.filter((p,i)=>i!==t&&i<limit&&!p.deleted));}
   let repaired=false;
-  positions.forEach((p,t)=>{if(overlaps(t,p,t)){positions[t]=nearestFree(t,p,t);repaired=true;}});
+  positions.forEach((p,t)=>{if(!p.deleted&&overlaps(t,p,t)){positions[t]=nearestFree(t,p,t);repaired=true;}});
   if(repaired||migrated)save();
   function paint(t){
+    rows[t].hidden=!!positions[t].deleted;
     const next=positions[t],changed=rows[t].classList.contains('vertical-track')!==next.vertical;
     rows[t].classList.toggle('vertical-track',next.vertical);rows[t].classList.toggle('track-row',!next.vertical);rows[t].classList.toggle('compact-track',!next.vertical&&next.height===20);
     if(changed)onOrientationChange?.(t,next.vertical);
@@ -63,7 +64,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
   function paintAll(){rows.forEach((_,t)=>paint(t));resizeCanvas();}
   function place(t,x,y,width=positions[t].width,height=positions[t].height,vertical=positions[t].vertical,beats=positions[t].beats,trim=false){
     const dimension=(axis,value)=>trim?Math.max(minimumSize(vertical)[axis],snap(value)):sizeSnap(t,axis,value,vertical);
-    const next={x:snapPosition(x),y:snapPosition(y),vertical,beats,width:dimension('width',width),height:dimension('height',height)};
+    const next={x:snapPosition(x),y:snapPosition(y),vertical,deleted:!!positions[t].deleted,beats,width:dimension('width',width),height:dimension('height',height)};
     if(overlaps(t,next))return false;
     positions[t]=next;paint(t);resizeCanvas();return true;
   }
@@ -78,7 +79,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
   function reflowGroup(indices,targets,baseline){
     const next=baseline.map(p=>({...p})),occupied=[...targets],displaced=[];
     indices.forEach((t,i)=>next[t]=targets[i]);
-    baseline.forEach((p,i)=>{if(!indices.includes(i)){if(targets.some(target=>intersects(p,target)))displaced.push(i);else occupied.push(p);}});
+    baseline.forEach((p,i)=>{if(!p.deleted&&!indices.includes(i)){if(targets.some(target=>intersects(p,target)))displaced.push(i);else occupied.push(p);}});
     displaced.forEach(i=>{next[i]=freePosition(baseline[i],occupied);occupied.push(next[i]);});
     positions=next;paintAll();
   }
@@ -113,9 +114,9 @@ window.createMusicLayout=function(rows,onOrientationChange){
   }
   rows.forEach((row,t)=>{
     row.setAttribute('role','group');
-    row.setAttribute('aria-label',`${row.querySelector('.track-label').textContent}. Drag to move; Select and use arrow keys to move four grid squares. The corner handle scales its display; the centered end handle trims its loop.`);
+    row.setAttribute('aria-label',`${row.querySelector('.track-label').textContent}. Drag to move; Select and use arrow keys to move four grid squares. Delete removes selected tracks. The corner handle scales its display; the centered end handle trims its loop.`);
     row.addEventListener('pointerdown',event=>{
-      if(event.button!==0||!event.isPrimary||event.target.closest('[data-track-play],[data-mute],[data-solo]'))return;
+      if(positions[t].deleted||event.button!==0||!event.isPrimary||event.target.closest('[data-track-play],[data-mute],[data-solo]'))return;
       suppressClick=null;document.activeElement?.blur();
       if(event.shiftKey){if(selected.has(t))selected.delete(t);else selected.add(t);showSelection();suppressClick=t;if(!selected.has(t))return;}
       else if(!selected.has(t))selectOnly(t);
@@ -143,7 +144,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
     const area={x:Math.min(x,marquee.startX),y:Math.min(y,marquee.startY),width:Math.abs(x-marquee.startX),height:Math.abs(y-marquee.startY)};
     Object.assign(selectionBox.style,{left:area.x+'px',top:area.y+'px',width:area.width+'px',height:area.height+'px'});
     selected.clear();if(marquee.additive)marquee.before.forEach(t=>selected.add(t));
-    positions.forEach((p,t)=>{if(intersects(area,p))selected.add(t);});showSelection();
+    positions.forEach((p,t)=>{if(!p.deleted&&intersects(area,p))selected.add(t);});showSelection();
   }
   function finishMarquee(cancel=false){
     if(!marquee)return;
@@ -203,5 +204,16 @@ window.createMusicLayout=function(rows,onOrientationChange){
     if(overlaps(t,next))next=nearestFree(t,next);
     rows[t].style.zIndex=++layer;place(t,next.x,next.y,next.width,next.height,vertical,next.beats,true);save();
   }
-  return {tick,toggleOrientation,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
+  function deleteTracks(indices=Array.from(selected)){
+    finish(true);finishMarquee(true);
+    const targets=indices.filter(t=>positions[t]&&!positions[t].deleted);if(!targets.length)return;
+    targets.forEach(t=>{positions[t]={...positions[t],deleted:true};selected.delete(t);});
+    showSelection();paintAll();save();
+  }
+  function restore(next){
+    finish(true);finishMarquee(true);positions=next.map(p=>({...p}));
+    selected.clear();showSelection();paintAll();save();
+  }
+  function cancelGestures(){finish(true);finishMarquee(true);}
+  return {tick,toggleOrientation,deleteTracks,restore,cancelGestures,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
 };
