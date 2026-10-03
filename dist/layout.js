@@ -1,14 +1,17 @@
 'use strict';
+window.musicGrid={unit:20,placementStep:80};
 window.createMusicLayout=function(rows,onOrientationChange){
-  const unit=20,key='music-grid-layout-v1',canvas=document.querySelector('#canvas');
+  const {unit,placementStep}=window.musicGrid,key='music-grid-layout-v1',canvas=document.querySelector('#canvas');
   const snap=value=>Math.max(0,Math.round(value/unit)*unit);
+  const snapPosition=value=>Math.max(0,Math.round(value/placementStep)*placementStep);
   const viewport=document.documentElement;
-  const initialX=Math.max(unit,snap((viewport.clientWidth-640)/2));
-  const initialY=viewport.clientWidth<=560?40:80;
+  const initialX=Math.max(placementStep,snapPosition((viewport.clientWidth-640)/2));
+  const initialY=placementStep;
   const minimumSize=vertical=>vertical?{width:80,height:160}:{width:160,height:20};
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
-  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*unit,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
+  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
+  let migrated=false;
   try{
     const saved=JSON.parse(localStorage.getItem(key));
     if(Array.isArray(saved)&&saved.length===rows.length&&saved.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.y>=0&&p.x<=100000&&p.y<=100000))positions=saved.map((p,t)=>{
@@ -16,7 +19,9 @@ window.createMusicLayout=function(rows,onOrientationChange){
       const hasBeats=Number.isFinite(p.beats)&&p.beats>=2&&p.beats<=2500;
       const dimension=(axis,value)=>Number.isFinite(value)&&value<=100000?(hasBeats?Math.max(minimumSize(vertical)[axis],snap(value)):sizeSnap(t,axis,value,vertical)):positions[t][axis];
       const width=dimension('width',p.width),height=dimension('height',p.height);
-      return {x:snap(p.x),y:snap(p.y),vertical,width,height,beats:hasBeats?p.beats:(vertical?height:width)/40};
+      const x=snapPosition(p.x),y=snapPosition(p.y);
+      if(x!==p.x||y!==p.y)migrated=true;
+      return {x,y,vertical,width,height,beats:hasBeats?p.beats:(vertical?height:width)/40};
     });
   }catch{}
   let drag=null,marquee=null,suppressClick=null,layer=10;
@@ -35,8 +40,8 @@ window.createMusicLayout=function(rows,onOrientationChange){
   function freePosition(position,occupied){
     const xs=new Set([position.x,0]),ys=new Set([position.y,0]);
     occupied.forEach(p=>{
-      xs.add(snap(p.x-position.width));xs.add(p.x+p.width);
-      ys.add(snap(p.y-position.height));ys.add(p.y+p.height);
+      xs.add(Math.max(0,Math.floor((p.x-position.width)/placementStep)*placementStep));xs.add(Math.ceil((p.x+p.width)/placementStep)*placementStep);
+      ys.add(Math.max(0,Math.floor((p.y-position.height)/placementStep)*placementStep));ys.add(Math.ceil((p.y+p.height)/placementStep)*placementStep);
     });
     const candidates=Array.from(xs).flatMap(x=>Array.from(ys,y=>({...position,x,y})));
     candidates.sort((a,b)=>(a.x-position.x)**2+(a.y-position.y)**2-((b.x-position.x)**2+(b.y-position.y)**2)||a.y-b.y||a.x-b.x);
@@ -45,7 +50,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
   function nearestFree(t,position,limit=positions.length){return freePosition(position,positions.filter((_,i)=>i!==t&&i<limit));}
   let repaired=false;
   positions.forEach((p,t)=>{if(overlaps(t,p,t)){positions[t]=nearestFree(t,p,t);repaired=true;}});
-  if(repaired)save();
+  if(repaired||migrated)save();
   function paint(t){
     const next=positions[t],changed=rows[t].classList.contains('vertical-track')!==next.vertical;
     rows[t].classList.toggle('vertical-track',next.vertical);rows[t].classList.toggle('track-row',!next.vertical);rows[t].classList.toggle('compact-track',!next.vertical&&next.height===20);
@@ -56,7 +61,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
   function paintAll(){rows.forEach((_,t)=>paint(t));resizeCanvas();}
   function place(t,x,y,width=positions[t].width,height=positions[t].height,vertical=positions[t].vertical,beats=positions[t].beats,trim=false){
     const dimension=(axis,value)=>trim?Math.max(minimumSize(vertical)[axis],snap(value)):sizeSnap(t,axis,value,vertical);
-    const next={x:snap(x),y:snap(y),vertical,beats,width:dimension('width',width),height:dimension('height',height)};
+    const next={x:snapPosition(x),y:snapPosition(y),vertical,beats,width:dimension('width',width),height:dimension('height',height)};
     if(overlaps(t,next))return false;
     positions[t]=next;paint(t);resizeCanvas();return true;
   }
@@ -89,7 +94,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
     else{
       drag.deltaX=Math.max(dx,-Math.min(...drag.members.map(t=>drag.baseline[t].x)));
       drag.deltaY=Math.max(dy,-Math.min(...drag.members.map(t=>drag.baseline[t].y)));
-      const gridX=Math.round(drag.deltaX/unit)*unit,gridY=Math.round(drag.deltaY/unit)*unit;
+      const gridX=Math.round(drag.deltaX/placementStep)*placementStep,gridY=Math.round(drag.deltaY/placementStep)*placementStep;
       reflowGroup(drag.members,drag.members.map(t=>({...drag.baseline[t],x:drag.baseline[t].x+gridX,y:drag.baseline[t].y+gridY})),drag.baseline);
     }
   }
@@ -106,7 +111,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
   }
   rows.forEach((row,t)=>{
     row.setAttribute('role','group');
-    row.setAttribute('aria-label',`${row.querySelector('.track-label').textContent}. Drag to move; Select and use arrow keys to move one grid square. The corner handle scales its display; the centered end handle trims its loop.`);
+    row.setAttribute('aria-label',`${row.querySelector('.track-label').textContent}. Drag to move; Select and use arrow keys to move four grid squares. The corner handle scales its display; the centered end handle trims its loop.`);
     row.addEventListener('pointerdown',event=>{
       if(event.button!==0||!event.isPrimary||event.target.closest('[data-track-play],[data-mute],[data-solo]'))return;
       suppressClick=null;document.activeElement?.blur();
@@ -119,7 +124,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
       if(event.detail!==0&&suppressClick===t){suppressClick=null;event.preventDefault();event.stopImmediatePropagation();}
     },true);
     row.addEventListener('keydown',event=>{
-      const steps={ArrowLeft:[-unit,0],ArrowRight:[unit,0],ArrowUp:[0,-unit],ArrowDown:[0,unit]};
+      const steps={ArrowLeft:[-placementStep,0],ArrowRight:[placementStep,0],ArrowUp:[0,-placementStep],ArrowDown:[0,placementStep]};
       const resize=!!event.target?.closest('[data-resize]'),trim=!!event.target?.closest('[data-trim]');
       if((event.altKey||resize||trim)&&steps[event.key]){
         event.preventDefault();event.stopPropagation();const [x,y]=steps[event.key];
@@ -177,7 +182,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
       else{selected.clear();showSelection();}return;
     }
     if(event.target?.closest?.('[data-resize],[data-trim]'))return;
-    const steps={ArrowLeft:[-unit,0],ArrowRight:[unit,0],ArrowUp:[0,-unit],ArrowDown:[0,unit]};
+    const steps={ArrowLeft:[-placementStep,0],ArrowRight:[placementStep,0],ArrowUp:[0,-placementStep],ArrowDown:[0,placementStep]};
     if(selected.size&&steps[event.key]){event.preventDefault();moveSelected(...steps[event.key]);}
   });
   window.addEventListener('resize',resizeCanvas);

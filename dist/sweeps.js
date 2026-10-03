@@ -1,6 +1,7 @@
 'use strict';
 // A global canvas loop mixes both track orientations on a shared audio-clock timeline.
 window.createMusicSweeps=function(options){
+  const {placementStep}=window.musicGrid;
   const heads=[];let activeSignature='';
   const axis=(p,vertical)=>({start:vertical?p.y:p.x,end:vertical?p.y+p.height:p.x+p.width,cross:vertical?p.x:p.y,span:vertical?p.width:p.height});
   function coordinate(head){
@@ -73,8 +74,8 @@ window.createMusicSweeps=function(options){
     finally{if(token===head.epoch)head.loading=false;options.changed();}
   }
   function add(x,y,vertical=false){
-    const origin=Math.max(0,Math.round((vertical?y:x)/20)*20);
-    const head={origin,position:origin,cross:Math.max(0,Math.round((vertical?x:y)/20)*20),vertical,startedAt:0,running:false,loading:false,paused:false,epoch:0,voices:[],skipped:new Set(),source:null};
+    const origin=Math.max(0,Math.round((vertical?y:x)/placementStep)*placementStep);
+    const head={origin,position:origin,cross:Math.max(0,Math.round((vertical?x:y)/placementStep)*placementStep),vertical,startedAt:0,running:false,loading:false,paused:false,epoch:0,voices:[],skipped:new Set(),source:null};
     const tracks=geometry(head,options.positions());if(!tracks.length||Math.max(...tracks.map(p=>p.end))<=origin)return;
     head.end=Math.max(...tracks.map(p=>p.end));
     const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.setAttribute('role','group');element.setAttribute('aria-label','Global playback loop');
