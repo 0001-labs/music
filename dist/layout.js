@@ -1,7 +1,7 @@
 'use strict';
 window.musicGrid={unit:20,placementStep:80};
 window.createMusicLayout=function(rows,onOrientationChange){
-  const {unit,placementStep}=window.musicGrid,key='music-grid-layout-v1',canvas=document.querySelector('#canvas');
+  const {unit,placementStep}=window.musicGrid,key='music-grid-layout-four-bar-v1',canvas=document.querySelector('#canvas');
   const snap=value=>Math.max(0,Math.round(value/unit)*unit);
   const snapPosition=value=>Math.max(0,Math.round(value/placementStep)*placementStep);
   const viewport=document.documentElement;
@@ -11,7 +11,6 @@ window.createMusicLayout=function(rows,onOrientationChange){
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
   let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
-  positions.slice(7).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,7+t).map(item=>item.y+item.height))/placementStep)*placementStep;});
   let migrated=false;
   try{
     const saved=JSON.parse(localStorage.getItem(key));

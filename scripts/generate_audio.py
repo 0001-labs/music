@@ -118,6 +118,7 @@ for track in range(len(names)):
         clip={'name':names[track][variant],'file':filename,'peaks':peaks}
         if events:clip['notes']=events
         row.append(clip)
-    clips.append(row)
+    # Test arrangement: repeat the same groove, without changing clip variants.
+    clips.append([dict(row[0]) for _ in range(4)])
 (OUT/'clips.js').write_text('window.MUSIC_CLIPS='+json.dumps(clips,separators=(',',':'))+';\n')
 print(f'Generated {len(clips)*4} original 2-bar loops at {BPM} BPM with measured waveform peaks.')
