@@ -53,3 +53,7 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 #global-loop-controls,.white-loop-controls{display:flex;height:20px;gap:0}.white-loop-controls button{height:20px;width:20px;padding:0;line-height:20px;background:#fff;color:var(--ink);font-size:9px}.white-loop-controls button:hover{background:#eee}
 
 .global-loop-resize{position:absolute;z-index:30;width:12px;height:12px;padding:0;background:#fff;box-shadow:0 0 0 1px var(--line);cursor:ew-resize;touch-action:none}.global-loop-resize::after{content:"";position:absolute;top:2px;bottom:2px;left:5px;width:1px;background:var(--ink)}.global-loop-resize.down{cursor:ns-resize}.global-loop-resize.down::after{top:5px;bottom:auto;left:2px;right:2px;width:auto;height:1px}
+
+.track-loop-indicator{position:absolute;top:2px;right:49px;z-index:6;width:16px;height:16px;line-height:16px;text-align:center;font-size:14px;color:var(--track-active-ink,var(--ink));background:var(--track-color,var(--accent));pointer-events:none}.track-loop-indicator[hidden]{display:none}
+
+.vertical-track .track-loop-indicator{top:auto;bottom:49px;left:2px;right:auto}

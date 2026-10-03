@@ -139,10 +139,10 @@ window.createMusicSweeps=function(options){
     const next=positions.map((_,t)=>trackActive(t)).join(',');
     if(next!==activeSignature){activeSignature=next;options.changed();}
   }
-  function trackPositions(t){
+  function trackPositions(t,looping){
     const now=options.audio().ctx?.currentTime;
     return heads.flatMap(head=>{
-      if(!head.running||now<head.startedAt)return [];
+      if(!head.running||now<head.startedAt||looping!==undefined&&head.looping!==looping)return [];
       const phase=(coordinate(head)-head.origin)/(head.end-head.origin)*head.cycleBeats;
       return head.voices.filter(voice=>voice.t===t&&phase>=voice.startBeat&&phase<voice.startBeat+voice.durationBeats).map(voice=>voice.offsetBeat+phase-voice.startBeat);
     });
@@ -151,5 +151,5 @@ window.createMusicSweeps=function(options){
   function stopTrack(t){heads.forEach(head=>{head.skipped.add(t);if(head.running)rescheduleHead(head,options.positions());});}
   function setTempo(){heads.forEach(head=>{if(head.running){head.position=coordinate(head);head.beat=timelineBeat(head);head.startedAt=Math.max(options.audio().ctx.currentTime,head.startedAt);}});}
   function reschedule(){heads.forEach(head=>{if(head.running)rescheduleHead(head,options.positions());});}
-  return {add,tick,pause,resume,stop,stopTrack,setTempo,reschedule,trackActive,trackPositions,hasPlayback:()=>heads.some(head=>head.running||head.loading),hasPaused:()=>heads.some(head=>head.paused),read:()=>heads.map(head=>({direction:head.vertical?'down':'right',start:head.origin,position:coordinate(head),end:head.end,looping:head.looping,beats:head.cycleBeats,playing:head.running,loading:head.loading}))};
+  return {add,tick,pause,resume,stop,stopTrack,setTempo,reschedule,trackActive,trackLooping:t=>trackPositions(t,true).length>0,trackPositions,hasPlayback:()=>heads.some(head=>head.running||head.loading),hasPaused:()=>heads.some(head=>head.paused),read:()=>heads.map(head=>({direction:head.vertical?'down':'right',start:head.origin,position:coordinate(head),end:head.end,looping:head.looping,beats:head.cycleBeats,playing:head.running,loading:head.loading}))};
 };

@@ -65,6 +65,7 @@ $('#piano-track').innerHTML=`<div class="track-row track-surface" data-track="7"
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
+const loopIndicators=rows.map(row=>{const icon=document.createElement('span');icon.className='track-loop-indicator';icon.textContent='↻';icon.setAttribute('aria-label','Looping');icon.title='Looping';icon.hidden=true;row.appendChild(icon);return icon;});
 const loopBoundaries=rows.map(row=>{
   const layer=document.createElement('div');layer.className='loop-boundaries';layer.setAttribute('aria-hidden','true');row.appendChild(layer);return layer;
 });
@@ -477,6 +478,7 @@ function updatePlayhead(){
     head.style[vertical?'top':'left']=Math.floor(beat/loopBeats[t]*(vertical?sizes[t].height:sizes[t].width)+1e-7)+'px';
     head.hidden=!active||ctx.currentTime<playback[t].startedAt;
     cells[t].forEach(cell=>cell.classList.toggle('active',(active||sweeps.trackActive(t))&&audible(t)));
+    loopIndicators[t].hidden=!audible(t)||!(playback[t].running||playback[t].starting||sweeps.trackLooping(t));
     sweepTrackHeads[t].innerHTML=audible(t)?sweeps.trackPositions(t).map(beat=>`<span class="sweep-track-head" style="${vertical?'top':'left'}:${Math.floor(beat/loopBeats[t]*(vertical?sizes[t].height:sizes[t].width))}px"></span>`).join(''):'';
   });
 }
