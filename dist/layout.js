@@ -18,10 +18,28 @@ window.createMusicLayout=function(rows){
     canvas.style.width=Math.ceil(width/unit)*unit+'px';
     canvas.style.height=Math.ceil(height/unit)*unit+'px';
   }
+  function overlaps(t,x,y,limit=positions.length){
+    return positions.some((p,i)=>i!==t&&i<limit&&x<p.x+rows[i].offsetWidth&&x+rows[t].offsetWidth>p.x&&y<p.y+rows[i].offsetHeight&&y+rows[t].offsetHeight>p.y);
+  }
+  function nearestFree(t,position){
+    const xs=new Set([position.x,0]),ys=new Set([position.y,0]);
+    positions.slice(0,t).forEach((p,i)=>{
+      xs.add(snap(p.x-rows[t].offsetWidth));xs.add(p.x+rows[i].offsetWidth);
+      ys.add(snap(p.y-rows[t].offsetHeight));ys.add(p.y+rows[i].offsetHeight);
+    });
+    const candidates=Array.from(xs).flatMap(x=>Array.from(ys,y=>({x,y})));
+    candidates.sort((a,b)=>(a.x-position.x)**2+(a.y-position.y)**2-((b.x-position.x)**2+(b.y-position.y)**2)||a.y-b.y||a.x-b.x);
+    return candidates.find(p=>!overlaps(t,p.x,p.y,t));
+  }
+  let repaired=false;
+  positions.forEach((p,t)=>{if(overlaps(t,p.x,p.y,t)){positions[t]=nearestFree(t,p);repaired=true;}});
+  if(repaired)save();
   function place(t,x,y){
-    positions[t]={x:snap(x),y:snap(y)};
+    const next={x:snap(x),y:snap(y)};
+    if(overlaps(t,next.x,next.y))return false;
+    positions[t]=next;
     rows[t].style.left=positions[t].x+'px';rows[t].style.top=positions[t].y+'px';
-    resizeCanvas();
+    resizeCanvas();return true;
   }
   positions.forEach((p,t)=>place(t,p.x,p.y));
   function move(){
