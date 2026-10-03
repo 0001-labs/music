@@ -1,6 +1,6 @@
 # Music by 0001
 
-A small open-source arrangement player prototype inspired by Ezo and Live. Six tracks run horizontally in 20px-high rows. A seventh track runs vertically underneath in a 20px-wide lane. Each has an 80×20px name chip. The waveforms are measured from real audio.
+A small open-source arrangement player prototype inspired by Ezo and Live. Six tracks run horizontally in 20px-high rows. A seventh track runs vertically underneath in a 80px-wide lane (four grid squares). Each has an 80×20px name chip. The waveforms are measured from real audio.
 
 [Play Music](https://music.0001.dev) · [Source code](https://github.com/0001-labs/music)
 
