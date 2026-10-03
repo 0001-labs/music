@@ -22,8 +22,9 @@ function trackChip(name,t){
 function trackClips(t,vertical=false){
   return clips[t].map((clip,c)=>`<button class="clip${vertical?' vertical-clip':''}" data-clip="${t},${c}" aria-label="${names[t]}: ${clip.name}. Click to move playhead." title="${clip.name}">${waveform(clip.peaks,vertical)}</button>`).join('');
 }
-$('#tracks').innerHTML=names.slice(0,6).map((name,t)=>`<div class="track-row track-surface" data-track="${t}">${trackChip(name,t)}<div class="clips" data-timeline="${t}">${trackClips(t)}<div class="playhead" aria-hidden="true" hidden></div></div></div>`).join('');
-$('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-track="6">${trackChip(names[6],6)}<div class="vertical-lane"><div class="vertical-clips" data-timeline="6">${trackClips(6,true)}</div><div class="playhead vertical-playhead" aria-hidden="true" hidden></div></div></div>`;
+function resizeHandle(t){return `<button class="resize-handle" data-resize="${t}" aria-label="Resize ${names[t]} waveform; use arrow keys" title="Drag to resize"></button>`;}
+$('#tracks').innerHTML=names.slice(0,6).map((name,t)=>`<div class="track-row track-surface" data-track="${t}">${trackChip(name,t)}<div class="clips" data-timeline="${t}">${trackClips(t)}<div class="playhead" aria-hidden="true" hidden></div></div>${resizeHandle(t)}</div>`).join('');
+$('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-track="6">${trackChip(names[6],6)}<div class="vertical-lane"><div class="vertical-clips" data-timeline="6">${trackClips(6,true)}</div><div class="playhead vertical-playhead" aria-hidden="true" hidden></div></div>${resizeHandle(6)}</div>`;
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
@@ -139,9 +140,11 @@ $('#tempo').addEventListener('change',event=>{
 });
 document.addEventListener('keydown',event=>{if(event.code==='Space'&&!/INPUT|BUTTON|TEXTAREA|SELECT/.test(event.target.tagName)){event.preventDefault();toggleAll();}});
 function updatePlayhead(){
+  const sizes=layout.getPositions();
   playheads.forEach((head,t)=>{
     const beat=currentBeat(t),active=playback[t].running&&audible(t);
-    head.style[head.classList.contains('vertical-playhead')?'top':'left']=Math.floor(beat/totalBeats*640)+'px';
+    const vertical=head.classList.contains('vertical-playhead'),length=vertical?sizes[t].height:sizes[t].width;
+    head.style[vertical?'top':'left']=Math.floor(beat/totalBeats*length)+'px';
     head.hidden=!active||ctx.currentTime<playback[t].startedAt;
     cells[t].forEach(cell=>cell.classList.toggle('active',active));
   });
