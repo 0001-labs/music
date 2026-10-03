@@ -61,3 +61,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .track-zoom-tag{position:absolute;z-index:6;top:2px;right:69px;display:flex;align-items:center;gap:2px;height:16px;padding:0 3px;background:#ffffffdf;color:var(--ink);font-size:10px;line-height:16px;border-radius:3px;pointer-events:auto}.track-zoom-tag svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1.2}.track-zoom-tag[hidden]{display:none}.vertical-track .track-zoom-tag{top:auto;bottom:70px;right:auto;left:2px}
 
 .clip.active,.clip.active:nth-child(2n),.track-loop-indicator{background-color:var(--track-display-color,var(--track-color,var(--accent)))}
+
+.track-pitch-handle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:8;min-width:16px;height:16px;padding:0 2px;line-height:16px;font-size:10px;background:#ffffffdd;border-radius:3px;cursor:ns-resize;touch-action:none;opacity:0}.track-surface:hover .track-pitch-handle,.track-surface:focus-within .track-pitch-handle,.track-pitch-handle[data-active="true"]{opacity:1}

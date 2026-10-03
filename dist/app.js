@@ -21,6 +21,8 @@ const muted=Array(names.length).fill(false),solo=Array(names.length).fill(false)
 const baseTempo=112,totalBeats=32,pixelsPerBeat=40;
 const loopBeats=names.map(()=>totalBeats);
 const displayZoom=names.map(()=>1);
+const pitches=names.map(()=>0),pitchCache=names.map(()=>null),pitchKey='music-track-pitches-v1';
+try{const saved=JSON.parse(localStorage.getItem(pitchKey));if(Array.isArray(saved))pitches.forEach((_,t)=>{if(Number.isInteger(saved[t])&&Math.abs(saved[t])<=24)pitches[t]=saved[t];});}catch{}
 const trackPeaks=clips.map(row=>row.flatMap(clip=>clip.peaks));
 const expandedArrangements=names.map(()=>null);
 const $=selector=>document.querySelector(selector);
@@ -66,6 +68,7 @@ $('#piano-track').innerHTML=`<div class="track-row track-surface" data-track="7"
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
+const pitchHandles=rows.map((row,t)=>{const handle=document.createElement('button');handle.className='track-pitch-handle';row.appendChild(handle);return handle;});
 const zoomTags=rows.map(row=>{const tag=document.createElement('span');tag.className='track-zoom-tag';tag.hidden=true;row.appendChild(tag);return tag;});
 const loopIndicators=rows.map(row=>{const icon=document.createElement('span');icon.className='track-loop-indicator';icon.textContent='↻';icon.setAttribute('aria-label','Looping');icon.title='Looping';icon.hidden=true;row.appendChild(icon);return icon;});
 const loopBoundaries=rows.map(row=>{
@@ -82,7 +85,7 @@ const layout=window.createMusicLayout(rows,(t,vertical)=>{
 },()=>{if(editHistory&&!editHistory.applying){editHistory.record();syncTrackPresence();}});
 const sweeps=window.createMusicSweeps({
   canvas:$('#canvas'),controls:$('#global-loop-controls'),positions:()=>layout.getPositions(),baseTempo,totalBeats,audible,
-  audio:()=>({ctx,tempo,pixelsPerBeat,arrangements,gains,master}),
+  audio:()=>({ctx,tempo,pixelsPerBeat,arrangements:arrangements?.map((_,t)=>pitchedBuffer(t)),gains,master}),
   async prepare(){message.textContent='Preparing the audio…';createAudio();await ctx.resume();await loadAudio();},
   startTime(){
     const earliest=ctx.currentTime+.06,barSeconds=240/tempo;
@@ -116,7 +119,7 @@ function patternNotes(spec,startBeat,beatCount){
   return notes;
 }
 function clipNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb){
-  const spec=pitchPatterns[track];if(!spec)return '';
+  const original=pitchPatterns[track];if(!original)return '';const spec={...original,notes:original.notes.map(note=>({...note,pitch:note.pitch+pitches[track]}))};
   const showStaff=pitchPx>=80,nameBand=pitchPx>=100?20:0;
   const staffBottom=showStaff?pitchPx-nameBand:pitchPx/2,staffTop=showStaff?staffBottom-80:staffBottom;
   const all=spec.notes.map(note=>spellPitch(note.pitch).step);
@@ -214,7 +217,7 @@ function pianoNotation(vertical,timePx,pitchPx,startBeat,beatCount,ppb){
     for(const bottom of grand?[trebleBottom,bassBottom]:[trebleBottom])for(let line=0;line<5;line++)body+=`<line x1="0" y1="${bottom-line*spacing*2}" x2="${timePx}" y2="${bottom-line*spacing*2}" stroke="currentColor" stroke-width="1"/>`;
   }
   notationEvents(7,startBeat,beatCount).filter(note=>grand||note.voice==='treble').forEach(note=>{
-    const pitch=spellPitch(note.pitch),bass=note.voice==='bass',bottom=bass?bassBottom:trebleBottom,reference=bass?-10:2;
+    const pitch=spellPitch(note.pitch+pitches[7]),bass=note.voice==='bass',bottom=bass?bassBottom:trebleBottom,reference=bass?-10:2;
     const position=pitch.step-reference,x=(note.beat-startBeat)*ppb+ppb/4,y=staff?bottom-position*spacing:pitchPx/2;
     if(staff){
       const up=position<4,sx=x+(up?4:-4),end=y+(up?-24:24);
@@ -253,7 +256,7 @@ renderViewToggle();
 const waveformSizes=Array(names.length).fill('');
 function updateWaveforms(sizes){
   sizes.forEach(({width,height,vertical,beats},t)=>{
-    const key=`${trackView},${width},${height},${vertical},${beats}`;if(waveformSizes[t]===key)return;
+    const key=`${trackView},${width},${height},${vertical},${beats},${pitches[t]}`;if(waveformSizes[t]===key)return;
     waveformSizes[t]=key;
     const length=vertical?height:width,part=length/4,displayPixelsPerBeat=length/beats;
     const zoom=displayPixelsPerBeat/pixelsPerBeat,change=Math.round((zoom-1)*100),tag=zoomTags[t];
@@ -345,6 +348,7 @@ function render(){
     row.classList.toggle('has-track-state',muted[t]||solo[t]);
     const mute=row.querySelector('[data-mute]'),s=row.querySelector('[data-solo]'),trackPlay=row.querySelector('[data-track-play]');
     const active=playback[t].running||playback[t].starting||sweeps.trackActive(t);
+    const pitch=pitches[t],handle=pitchHandles[t];handle.textContent=pitch?`${pitch>0?'+':'−'}${Math.abs(pitch)}`:'↓';handle.dataset.active=String(pitch!==0);handle.title=`Pitch ${pitch>0?'+':''}${pitch} semitones; drag down to lower`;handle.setAttribute('aria-label',`${names[t]}: ${handle.title}`);
     trackPlay.textContent=active?'■':'▶';trackPlay.setAttribute('aria-pressed',active);
     trackPlay.setAttribute('aria-label',(active?'Stop ':'Play ')+names[t]);
     trackPlay.title=(active?'Stop ':'Play ')+names[t];
@@ -375,9 +379,21 @@ function loadAudio(){
   })).then(result=>arrangements=result).catch(error=>{loading=null;throw error;});
   return loading;
 }
+function pitchedBuffer(t){
+  const original=arrangements[t];if(!pitches[t])return original;
+  const cache=pitchCache[t];if(cache?.semitones===pitches[t]&&cache.original===original)return cache.buffer;
+  const buffer=window.musicPitchBuffer(ctx,original,pitches[t]);pitchCache[t]={semitones:pitches[t],original,buffer};return buffer;
+}
+function setTrackPitch(t,value){
+  value=Math.max(-24,Math.min(24,Math.round(value)));if(value===pitches[t])return;
+  pitches[t]=value;pitchCache[t]=null;expandedArrangements[t]=null;
+  if(arrangements)pitchedBuffer(t);
+  const state=playback[t];if(state.running){const beat=state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60,at=Math.max(ctx.currentTime,state.startedAt);try{state.source.stop();}catch{}startSource(t,at,beat%loopBeats[t],beat);}
+  sweeps.reschedule();try{localStorage.setItem(pitchKey,JSON.stringify(pitches));}catch{}render();
+}
 function bufferForLoop(t){
-  if(loopBeats[t]<=totalBeats)return arrangements[t];
-  const original=arrangements[t],length=Math.round(loopBeats[t]*60/baseTempo*original.sampleRate);
+  if(loopBeats[t]<=totalBeats)return pitchedBuffer(t);
+  const original=pitchedBuffer(t),length=Math.round(loopBeats[t]*60/baseTempo*original.sampleRate);
   const cached=expandedArrangements[t];if(cached?.length===length)return cached;
   const buffer=ctx.createBuffer(1,length,original.sampleRate),samples=original.getChannelData(0);
   for(let offset=0;offset<length;offset+=samples.length)buffer.copyToChannel(samples.subarray(0,Math.min(samples.length,length-offset)),0,offset);
@@ -498,7 +514,7 @@ function updatePlayhead(){
 function animate(){layout.tick();updatePlayhead();requestAnimationFrame(animate);}
 if(document.modelContext?.registerTool){
   const lifecycle=new AbortController();
-  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,pixelsPerBeat,canvasPlayheads:sweeps.read(),tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),bars:loopBeats[t]/4,muted:muted[t],solo:solo[t],color:trackColors[t]||'light-green',position:layout.getPositions()[t]})).filter(track=>!track.position.deleted)};}};
+  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,pixelsPerBeat,canvasPlayheads:sweeps.read(),tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),bars:loopBeats[t]/4,muted:muted[t],solo:solo[t],color:trackColors[t]||'light-green',pitchSemitones:pitches[t],position:layout.getPositions()[t]})).filter(track=>!track.position.deleted)};}};
   try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }
@@ -511,9 +527,10 @@ function syncTrackPresence(){
 }
 const undoButton=$('#undo'),redoButton=$('#redo');
 editHistory=window.createMusicHistory({
-  read:()=>({tempo,positions:layout.getPositions(),colors:[...trackColors],muted:[...muted],solo:[...solo]}),
+  read:()=>({tempo,pitches:[...pitches],positions:layout.getPositions(),colors:[...trackColors],muted:[...muted],solo:[...solo]}),
   apply(state){
     if(state.tempo!==tempo)changeTempo(state.tempo);
+    state.pitches.forEach((value,t)=>setTrackPitch(t,value));
     trackColors=[...state.colors];muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);
     layout.restore(state.positions);names.forEach((_,t)=>applyTrackColor(t));
     try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
@@ -523,12 +540,22 @@ editHistory=window.createMusicHistory({
 });
 function resetArrangement(){
   layout.cancelGestures();closeMenu();stop();
+  pitches.fill(0);pitchCache.fill(null);expandedArrangements.fill(null);try{localStorage.setItem(pitchKey,JSON.stringify(pitches));}catch{}
   tempo=baseTempo;$('#tempo').value=tempo;muted.fill(false);solo.fill(false);trackColors=names.map(()=>null);
   names.forEach((_,t)=>applyTrackColor(t));
   try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
   layout.reset();syncTrackPresence();updatePlayhead();editHistory.record();
 }
 $('#reset').addEventListener('click',resetArrangement);
+pitchHandles.forEach((handle,t)=>{
+  let drag=null;
+  handle.addEventListener('pointerdown',event=>{if(event.button!==0||!event.isPrimary)return;event.preventDefault();event.stopPropagation();drag={id:event.pointerId,y:event.clientY,pitch:pitches[t]};handle.setPointerCapture(event.pointerId);});
+  handle.addEventListener('pointermove',event=>{if(!drag||event.pointerId!==drag.id)return;event.preventDefault();event.stopPropagation();setTrackPitch(t,drag.pitch-Math.round((event.clientY-drag.y)/12));});
+  function finish(cancel){if(!drag)return;const previous=drag;drag=null;if(cancel)setTrackPitch(t,previous.pitch);else editHistory.record();if(handle.hasPointerCapture(previous.id))handle.releasePointerCapture(previous.id);}
+  handle.addEventListener('pointerup',event=>{event.stopPropagation();finish(false);});handle.addEventListener('pointercancel',()=>finish(true));handle.addEventListener('lostpointercapture',()=>finish(true));
+  handle.addEventListener('keydown',event=>{if(event.key==='Escape'&&drag){event.preventDefault();event.stopPropagation();finish(true);return;}if(!['ArrowDown','ArrowUp','Home'].includes(event.key))return;event.preventDefault();event.stopPropagation();setTrackPitch(t,event.key==='Home'?0:pitches[t]+(event.key==='ArrowDown'?-1:1));editHistory.record();});
+  handle.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();setTrackPitch(t,0);editHistory.record();});
+});
 function undoEdits(){layout.cancelGestures();closeMenu();editHistory.undo();}
 function redoEdits(){layout.cancelGestures();closeMenu();editHistory.redo();}
 function deleteSelectedTracks(target=null){
