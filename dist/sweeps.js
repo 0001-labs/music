@@ -19,9 +19,9 @@ window.createMusicSweeps=function(options){
   function signature(head,positions){return JSON.stringify([positions,positions.map((_,t)=>options.audible(t)),Array.from(head.skipped)]);}
   function paint(head,positions){
     const tracks=positions.filter(p=>!p.deleted).map(p=>axis(p,head.vertical));
-    const first=Math.min(head.cross,...tracks.map(p=>p.cross)),last=Math.max(head.cross+20,...tracks.map(p=>p.cross+p.span));
+    const first=tracks.length?Math.min(...tracks.map(p=>p.cross)):head.cross,last=tracks.length?Math.max(...tracks.map(p=>p.cross+p.span)):head.cross+20;
     const position=Math.floor(coordinate(head)),length=head.end-head.origin;
-    Object.assign(head.element.style,head.vertical?{left:head.cross+'px',top:head.origin+'px',width:'20px',height:length+'px'}:{left:head.origin+'px',top:head.cross+'px',width:length+'px',height:'20px'});
+    Object.assign(head.element.style,head.vertical?{left:first+'px',top:head.origin+'px',width:(last-first)+'px',height:length+'px'}:{left:head.origin+'px',top:first+'px',width:length+'px',height:(last-first)+'px'});
     Object.assign(head.cursor.style,head.vertical?{left:first+'px',top:position+'px',width:(last-first)+'px',height:'1px'}:{left:position+'px',top:first+'px',width:'1px',height:(last-first)+'px'});
     head.progress.style[head.vertical?'top':'left']=Math.floor(coordinate(head)-head.origin)+'px';
     head.element.classList.toggle('paused',!head.running&&!head.loading);head.cursor.classList.toggle('paused',!head.running&&!head.loading);
@@ -84,7 +84,7 @@ window.createMusicSweeps=function(options){
     const head={origin,position:origin,beat:0,cross:Math.max(0,Math.round((vertical?x:y)/placementStep)*placementStep),vertical,looping,startedAt:0,running:false,loading:false,paused:false,epoch:0,voices:[],skipped:new Set(),source:null};
     const tracks=geometry(head,options.positions());if(!tracks.length||Math.max(...tracks.map(p=>p.end))<=origin)return;
     head.end=Math.max(...tracks.map(p=>p.end));
-    const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.hidden=true;element.setAttribute('role','group');element.setAttribute('aria-label',looping?'Global playback loop':'Global arrangement playback');
+    const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.hidden=!looping;element.setAttribute('role','group');element.setAttribute('aria-label',looping?'Global playback loop':'Global arrangement playback');
     const stop=document.createElement('button');stop.className='canvas-loop-stop';stop.textContent='■';stop.setAttribute('aria-label','Stop global playback loop');stop.title='Stop loop';
     const progress=document.createElement('span');progress.className='canvas-loop-progress';progress.setAttribute('aria-hidden','true');
     const cursor=document.createElement('button');cursor.className='canvas-playhead'+(vertical?' down':'');cursor.setAttribute('aria-label','Stop global playback loop');cursor.title='Stop loop';
