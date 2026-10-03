@@ -5,6 +5,15 @@ const names=['Kick','Snare','Hats','Bass','Keys','Air'];
 const muted=Array(6).fill(false),solo=Array(6).fill(false);
 const baseTempo=112,totalBeats=32;
 const $=selector=>document.querySelector(selector);
+function alignWorkspace(){
+  const unit=20,viewport=document.documentElement.clientWidth;
+  const width=Math.min(720,Math.max(unit,Math.floor((viewport-2*unit)/unit)*unit));
+  const left=Math.max(0,Math.round((viewport-width)/(2*unit))*unit);
+  document.documentElement.style.setProperty('--workspace-width',width+'px');
+  document.documentElement.style.setProperty('--workspace-left',left+'px');
+}
+alignWorkspace();
+window.addEventListener('resize',alignWorkspace);
 const liveSources=new Set();
 let tempo=112,ctx,master,analyser,gains=[],arrangements,loading;
 let running=false,starting=false,origin=0,pausedBeat=0,epoch=0;
