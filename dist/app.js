@@ -90,16 +90,111 @@ document.addEventListener('dblclick',event=>{
   if(event.button!==0||event.target.closest('.track-surface,.transport,.context-menu,.canvas-playhead,.canvas-playhead-track,input,textarea,select,[contenteditable="true"]'))return;
   event.preventDefault();void sweeps.add(event.clientX+window.scrollX,event.clientY+window.scrollY,event.shiftKey);
 });
+const pitchPatterns={
+  3:{cycle:8,notes:[33,33,36,31,33,33,40,36].map((pitch,beat)=>({pitch,beat,dur:1}))},
+  4:{cycle:8,notes:[[57,60,64,67],[53,57,60,64]].flatMap((chord,bar)=>chord.map(pitch=>({pitch,beat:bar*4,dur:4})))},
+  6:{cycle:8,notes:[69,72,76,79].map((pitch,index)=>({pitch,beat:index*2,dur:1}))}
+};
+function spellPitch(midi){
+  const pc=((midi%12)+12)%12,sharp=[1,3,6,8,10].includes(pc),natural=sharp?midi-1:midi;
+  const letter=[0,2,4,5,7,9,11].indexOf(((natural%12)+12)%12);
+  return {step:(Math.floor(natural/12)-1-4)*7+letter,name:'CDEFGAB'[letter]+(sharp?'#':'')};
+}
+function patternNotes(spec,startBeat,beatCount){
+  const notes=[],end=startBeat+beatCount;
+  for(let origin=Math.floor(startBeat/spec.cycle)*spec.cycle;origin<end;origin+=spec.cycle){
+    spec.notes.forEach(note=>{
+      const beat=origin+note.beat;
+      if(beat>=startBeat-1e-6&&beat<end-1e-6)notes.push({...note,beat});
+    });
+  }
+  return notes;
+}
+function clipNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb){
+  const spec=pitchPatterns[track];if(!spec)return '';
+  const showStaff=pitchPx>=80,nameBand=pitchPx>=100?20:0;
+  const staffBottom=showStaff?pitchPx-nameBand:pitchPx/2,staffTop=showStaff?staffBottom-80:staffBottom;
+  const all=spec.notes.map(note=>spellPitch(note.pitch).step);
+  const minStep=Math.min(...all),span=Math.max(...all)-minStep;
+  const origin=Math.max(0,Math.min(Math.max(0,8-span),Math.round((8-span)/2)));
+  const yOf=step=>showStaff?staffBottom-(origin+(step-minStep))*10:pitchPx/2;
+  let body='';
+  if(showStaff){
+    for(let line=0;line<5;line++){
+      const raw=staffBottom-line*20,y=raw<=0?1:raw>=pitchPx?pitchPx-1:raw;
+      body+=`<line x1="0" y1="${y}" x2="${timePx}" y2="${y}" stroke="#1e1e1e" stroke-width="1" shape-rendering="crispEdges"/>`;
+    }
+    for(let beat=Math.ceil((startBeat+1e-6)/4)*4;beat<startBeat+beatCount-1e-6;beat+=4){
+      const x=(beat-startBeat)*ppb;
+      if(x<=1||x>=timePx-1)continue;
+      body+=`<line x1="${x}" y1="${Math.max(0,staffTop)}" x2="${x}" y2="${staffBottom}" stroke="#1e1e1e" stroke-width="${beat%8===0?1.6:1}" shape-rendering="crispEdges"/>`;
+    }
+  }
+  let drawn=patternNotes(spec,startBeat,beatCount).map(note=>({...note,...spellPitch(note.pitch)}));
+  if(!showStaff){
+    const highest=new Map();
+    drawn.forEach(note=>{const prev=highest.get(note.beat);if(!prev||note.step>prev.step)highest.set(note.beat,note);});
+    drawn=Array.from(highest.values());
+  }
+  drawn.forEach(note=>{note.y=yOf(note.step);note.pos=origin+(note.step-minStep);});
+  drawn.forEach(note=>{
+    const x=(note.beat-startBeat)*ppb+ppb/4;
+    const open=showStaff&&note.dur>=2,whole=showStaff&&note.dur>=4,rx=whole?7.5:6.5,ry=showStaff?4.6:4;
+    const up=note.pos<4;
+    if(showStaff&&!whole){
+      const sx=up?x+rx-1.1:x-rx+1.1,y1=up?note.y-1:note.y+1,y2=up?note.y-28:note.y+28;
+      body+=`<line x1="${sx}" y1="${y1}" x2="${sx}" y2="${y2}" stroke="#1e1e1e" stroke-width="1.2"/>`;
+      if(note.dur<1)body+=up?`<path d="M${sx} ${y2} c8 2 12 8 4 14" fill="none" stroke="#1e1e1e" stroke-width="1.2"/>`:`<path d="M${sx} ${y2} c8 -2 12 -8 4 -14" fill="none" stroke="#1e1e1e" stroke-width="1.2"/>`;
+    }
+    if(showStaff&&(note.pos>8||note.pos<0)){
+      const ledger=note.pos>8?(note.pos%2?note.pos-1:note.pos):(note.pos%2?note.pos+1:note.pos);
+      const ly=staffBottom-ledger*10;
+      if(ly>0&&ly<pitchPx)body+=`<line x1="${x-11}" y1="${ly}" x2="${x+11}" y2="${ly}" stroke="#1e1e1e" stroke-width="1"/>`;
+    }
+    body+=`<ellipse cx="${x}" cy="${note.y}" rx="${rx}" ry="${ry}" transform="rotate(-18 ${x} ${note.y})" fill="${open?'#fff':'#1e1e1e'}" stroke="#1e1e1e" stroke-width="1.3"/>`;
+  });
+  if(nameBand){
+    const named=new Map();
+    drawn.forEach(note=>{
+      const key=note.beat;
+      const prev=named.get(key);
+      if(!prev||note.step>prev.step)named.set(key,note);
+    });
+    named.forEach(note=>{
+      const x=(note.beat-startBeat)*ppb+ppb/4;
+      body+=`<text x="${x}" y="${pitchPx-5}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1e1e1e">${note.name}</text>`;
+    });
+  }
+  const inner=body;
+  if(!vertical)return `<svg class="notation" viewBox="0 0 ${timePx} ${pitchPx}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">${inner}</svg>`;
+  return `<svg class="notation" viewBox="0 0 ${pitchPx} ${timePx}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true"><g transform="translate(${pitchPx} 0) rotate(90)">${inner}</g></svg>`;
+}
+const viewToggle=$('#track-view'),viewKey='music-track-view-v1';
+let trackView='waveform';
+try{if(localStorage.getItem(viewKey)==='notation')trackView='notation';}catch{}
+function renderViewToggle(){
+  const notation=trackView==='notation';
+  viewToggle.textContent=notation?'Waveform':'Notation';
+  viewToggle.setAttribute('aria-pressed',String(notation));
+  viewToggle.title=notation?'Switch to waveforms':'Switch to musical notation';
+  viewToggle.setAttribute('aria-label',viewToggle.title);
+}
+viewToggle.addEventListener('click',()=>{
+  trackView=trackView==='waveform'?'notation':'waveform';
+  try{localStorage.setItem(viewKey,trackView);}catch{}
+  renderViewToggle();updatePlayhead();
+});
+renderViewToggle();
 const waveformSizes=Array(names.length).fill('');
 function updateWaveforms(sizes){
   sizes.forEach(({width,height,vertical,beats},t)=>{
-    const key=`${width},${height},${vertical},${beats}`;if(waveformSizes[t]===key)return;
+    const key=`${trackView},${width},${height},${vertical},${beats}`;if(waveformSizes[t]===key)return;
     waveformSizes[t]=key;
     const length=vertical?height:width,part=length/4,displayPixelsPerBeat=length/beats;
     rows[t].style.setProperty('--clip-span',8*displayPixelsPerBeat+'px');
     const clipWidth=vertical?width-6:part,clipHeight=vertical?part:height-4;
     cells[t].forEach((cell,c)=>{
-      cell.innerHTML=waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part,displayPixelsPerBeat);
+      cell.innerHTML=trackView==='notation'&&pitchPatterns[t]?clipNotation(t,vertical,part,vertical?width:height,c*beats/4,beats/4,displayPixelsPerBeat):waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part,displayPixelsPerBeat);
       cell.style.backgroundPosition=vertical?`0px ${-c*part}px`:`${-c*part}px 0px`;
       const clip=clips[t][Math.floor(c*part/(8*displayPixelsPerBeat))%4];
       cell.title=clip.name;cell.setAttribute('aria-label',`${names[t]}: ${clip.name}. Click to move playhead.`);
