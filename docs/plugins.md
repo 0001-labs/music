@@ -13,7 +13,7 @@ Music is an open-source grid player by 0001. Plugins add instruments, audio effe
 
 ## Interface constraints
 
-- Each row remains a track; square clips remain the unit of arrangement.
+- Each track is one 20px-high row, with an 80×20px name chip and a horizontal waveform timeline. The host owns the grid geometry and arrangement playback.
 - Plugins declare controls using host-provided sliders, choices, toggles, and numeric inputs. The host renders them with Music's grid, spacing, typography, and white/ink palette.
 - No arbitrary HTML, CSS, DOM access, overlays, global shortcuts, or replacement of transport controls.
 - Plugins cannot change other tracks, master output, project ownership, or the app's branding.

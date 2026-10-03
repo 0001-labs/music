@@ -1,42 +1,10 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#ffffff">
-  <meta name="description" content="A little grid for making music. Six tracks, original audio loops, and waveforms.">
-  <title>Music</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2399ff73'/%3E%3Cpath d='M8 13v6m4-10v14m4-18v22m4-16v10m4-7v4' stroke='%23171717' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css">
-  <script src="clips.js" defer></script>
-  <script src="app.js" defer></script>
-</head>
-<body>
-  <main>
-    <header class="page-header">
-      <div class="identity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4m4-7v10m5-14v18m5-14v10m4-7v4"/></svg><h1>Music</h1><a class="publisher" href="https://0001.dev">by 0001</a><span class="prototype">Prototype</span></div>
-      <span class="session-name">An afternoon loop</span>
-    </header>
-    <section class="transport" aria-label="Playback controls">
-      <div class="transport-left">
-        <button id="play" class="play-button" aria-label="Play all tracks"><span class="play-icon" aria-hidden="true">▶</span><span id="play-label">Play</span></button>
-        <button id="stop" class="stop-button" aria-label="Stop and return to the beginning" title="Stop"><span aria-hidden="true">■</span></button>
-        <span class="transport-divider"></span>
-        <label class="tempo"><input id="tempo" type="number" min="70" max="160" step="1" value="112" aria-label="Tempo in beats per minute"><span>BPM</span></label>
-        <span class="time-signature">4/4</span>
-      </div>
-      <div class="transport-right"><span id="position" class="position" aria-label="Playback position">1.1.1</span><span class="loop-label">↻ &nbsp;2 bars</span></div>
-    </section>
-    <div id="message" role="status" aria-live="polite"></div>
-    <section class="session" aria-label="Track and clip grid">
-      <div class="grid-heading"><span>Tracks</span><div class="scene-heading"><button data-scene="0" aria-label="Launch scene 1"><span>01</span><span class="launch-icon">▶</span></button><button data-scene="1" aria-label="Launch scene 2"><span>02</span><span class="launch-icon">▶</span></button><button data-scene="2" aria-label="Launch scene 3"><span>03</span><span class="launch-icon">▶</span></button><button data-scene="3" aria-label="Launch scene 4"><span>04</span><span class="launch-icon">▶</span></button></div><span class="level-heading">Level</span></div>
-      <div id="tracks"></div>
-    </section>
-    <footer>
-      <p id="hint">Click a square to play. Loops change on the next bar.</p>
-      <div class="master"><label for="master-volume">Master</label><input type="range" id="master-volume" min="0" max="1" step="0.01" value="0.72" aria-label="Master volume"><div class="meter" aria-label="Audio output level"><i id="meter-fill"></i></div></div>
-    </footer>
-    <div class="below"><span>6 tracks · 24 loops · A minor</span><span><a class="source-link" href="https://github.com/0001-labs/music" target="_blank" rel="noreferrer">Open source · MIT</a> &nbsp; <kbd>Space</kbd> play / pause</span></div>
-  </main>
-</body>
-</html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#ffffff"><meta name="description" content="Music by 0001. An open-source grid arrangement player with audio loops and waveforms."><title>Music</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2399ff73'/%3E%3Cpath d='M8 13v6m4-10v14m4-18v22m4-16v10m4-7v4' stroke='%23171717' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css"><script src="clips.js" defer></script><script src="app.js" defer></script>
+</head><body><main>
+<section class="transport" aria-label="Playback controls"><div class="transport-left"><button id="play" class="play-button" aria-label="Play arrangement"><span class="play-icon" aria-hidden="true">▶</span><span id="play-label">Play</span></button><button id="stop" class="stop-button" aria-label="Stop and return to the beginning" title="Stop"><span aria-hidden="true">■</span></button><label class="tempo"><input id="tempo" type="number" min="70" max="160" step="1" value="112" aria-label="Tempo in beats per minute"><span>BPM</span></label><span class="time-signature">4/4</span></div><div class="transport-right"><span id="position" class="position" aria-label="Playback position">1.1.1</span><span class="loop-label">↻ 1–9</span></div></section>
+<div id="message" role="status" aria-live="polite"></div>
+<section class="session" aria-label="Track arrangement"><div class="arrangement"><div class="grid-heading"><span>Tracks</span><div class="ruler" id="ruler" aria-label="Bar ruler"></div></div><div id="tracks"></div><div id="playhead" class="playhead" aria-hidden="true"></div></div></section>
+</main></body></html>
