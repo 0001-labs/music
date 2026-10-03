@@ -564,7 +564,7 @@ function resetArrangement(preserveBlocks=false){
   tempo=baseTempo;$('#tempo').value=tempo;muted.fill(false);solo.fill(false);trackColors=names.map(()=>null);
   names.forEach((_,t)=>applyTrackColor(t));
   try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
-  layout.reset();if(preserveBlocks){const positions=layout.getPositions(),bottom=Math.ceil(Math.max(0,...blocks.bounds().map(p=>p.y+p.height))/80)*80+80;positions.forEach(p=>p.y+=bottom);layout.restore(positions);}syncTrackPresence();updatePlayhead();recordEdit();
+  layout.reset();if(preserveBlocks){const positions=layout.getPositions(),bottom=Math.ceil(Math.max(0,...blocks.bounds().map(p=>p.y+p.height))/20)*20+20;positions.forEach(p=>p.y+=bottom);layout.restore(positions);}syncTrackPresence();updatePlayhead();recordEdit();
 }
 $('#reset').addEventListener('click',()=>resetArrangement());
 pitchHandles.forEach((handle,t)=>{

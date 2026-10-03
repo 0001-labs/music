@@ -10,7 +10,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
   const minimumSize=vertical=>vertical?{width:80,height:160}:{width:160,height:20};
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
-  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.classList.contains('vertical-track')?80:640,height:row.classList.contains('vertical-track')?640:row.offsetHeight,vertical:row.classList.contains('vertical-track'),deleted:false,beats:16}));
+  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*unit,width:row.classList.contains('vertical-track')?80:640,height:row.classList.contains('vertical-track')?640:row.offsetHeight,vertical:row.classList.contains('vertical-track'),deleted:false,beats:16}));
   const defaultPositions=positions.map(p=>({...p}));
   let migrated=false;
   try{
@@ -26,11 +26,11 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
         const length=Math.max(minimumSize(vertical)[vertical?'height':'width'],Math.round((vertical?height:width)*beats/oldBeats/placementStep)*placementStep);
         if(vertical)height=length;else width=length;migrated=true;
       }
-      const x=snapPosition(p.x),y=snapPosition(p.y);
+      const x=snapPosition(p.x),y=snap(p.y);
       if(x!==p.x||y!==p.y)migrated=true;
       return {x,y,vertical,width,height,deleted:p.deleted===true,beats};
     });
-    if(migrated&&Array.isArray(saved)&&saved.length>0&&saved.length<rows.length)positions.slice(saved.length).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,saved.length+t).map(item=>item.y+item.height))/placementStep)*placementStep;});
+    if(migrated&&Array.isArray(saved)&&saved.length>0&&saved.length<rows.length)positions.slice(saved.length).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,saved.length+t).map(item=>item.y+item.height))/unit)*unit;});
   }catch{}
   let obstacles=()=>[];
   let drag=null,marquee=null,suppressClick=null,layer=10;
@@ -50,7 +50,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     const xs=new Set([position.x,0]),ys=new Set([position.y,0]);
     occupied.forEach(p=>{
       xs.add(Math.max(0,Math.floor((p.x-position.width)/placementStep)*placementStep));xs.add(Math.ceil((p.x+p.width)/placementStep)*placementStep);
-      ys.add(Math.max(0,Math.floor((p.y-position.height)/placementStep)*placementStep));ys.add(Math.ceil((p.y+p.height)/placementStep)*placementStep);
+      ys.add(Math.max(0,Math.floor((p.y-position.height)/unit)*unit));ys.add(Math.ceil((p.y+p.height)/unit)*unit);
     });
     const candidates=Array.from(xs).flatMap(x=>Array.from(ys,y=>({...position,x,y})));
     candidates.sort((a,b)=>(a.x-position.x)**2+(a.y-position.y)**2-((b.x-position.x)**2+(b.y-position.y)**2)||a.y-b.y||a.x-b.x);
@@ -71,7 +71,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
   function paintAll(){rows.forEach((_,t)=>paint(t));resizeCanvas();}
   function place(t,x,y,width=positions[t].width,height=positions[t].height,vertical=positions[t].vertical,beats=positions[t].beats,trim=false){
     const dimension=(axis,value)=>trim?Math.max(minimumSize(vertical)[axis],snap(value)):sizeSnap(t,axis,value,vertical);
-    const next={x:snapPosition(x),y:snapPosition(y),vertical,deleted:!!positions[t].deleted,beats,width:dimension('width',width),height:dimension('height',height)};
+    const next={x:snapPosition(x),y:snap(y),vertical,deleted:!!positions[t].deleted,beats,width:dimension('width',width),height:dimension('height',height)};
     if(overlaps(t,next))return false;
     positions[t]=next;paint(t);resizeCanvas();return true;
   }
@@ -105,7 +105,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     else{
       drag.deltaX=Math.max(dx,-Math.min(...drag.members.map(t=>drag.baseline[t].x)));
       drag.deltaY=Math.max(dy,-Math.min(...drag.members.map(t=>drag.baseline[t].y)));
-      const gridX=Math.round(drag.deltaX/placementStep)*placementStep,gridY=Math.round(drag.deltaY/placementStep)*placementStep;
+      const gridX=Math.round(drag.deltaX/placementStep)*placementStep,gridY=Math.round(drag.deltaY/unit)*unit;
       reflowGroup(drag.members,drag.members.map(t=>({...drag.baseline[t],x:drag.baseline[t].x+gridX,y:drag.baseline[t].y+gridY})),drag.baseline);
     }
   }
@@ -135,7 +135,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
       if(event.detail!==0&&suppressClick===t){suppressClick=null;event.preventDefault();event.stopImmediatePropagation();}
     },true);
     row.addEventListener('keydown',event=>{
-      const steps={ArrowLeft:[-placementStep,0],ArrowRight:[placementStep,0],ArrowUp:[0,-placementStep],ArrowDown:[0,placementStep]};
+      const steps={ArrowLeft:[-placementStep,0],ArrowRight:[placementStep,0],ArrowUp:[0,-unit],ArrowDown:[0,unit]};
       const resize=!!event.target?.closest('[data-resize]'),trim=!!event.target?.closest('[data-trim]');
       if((event.altKey||resize||trim)&&steps[event.key]){
         event.preventDefault();event.stopPropagation();const [x,y]=steps[event.key];
@@ -193,7 +193,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
       else{selected.clear();showSelection();}return;
     }
     if(event.target?.closest?.('[data-resize],[data-trim]'))return;
-    const steps={ArrowLeft:[-placementStep,0],ArrowRight:[placementStep,0],ArrowUp:[0,-placementStep],ArrowDown:[0,placementStep]};
+    const steps={ArrowLeft:[-placementStep,0],ArrowRight:[placementStep,0],ArrowUp:[0,-unit],ArrowDown:[0,unit]};
     if(selected.size&&steps[event.key]){event.preventDefault();moveSelected(...steps[event.key]);}
   });
   window.addEventListener('resize',resizeCanvas);
