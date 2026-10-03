@@ -25,6 +25,7 @@ window.createMusicSweeps=function(options){
     Object.assign(head.cursor.style,head.vertical?{left:first+'px',top:position+'px',width:(last-first)+'px',height:'1px'}:{left:position+'px',top:first+'px',width:'1px',height:(last-first)+'px'});
     head.progress.style[head.vertical?'top':'left']=Math.floor(coordinate(head)-head.origin)+'px';
     head.element.classList.toggle('paused',!head.running&&!head.loading);head.cursor.classList.toggle('paused',!head.running&&!head.loading);
+    if(head.playButton){const active=head.running||head.loading;head.playButton.textContent=active?'Ⅱ':'▶';head.playButton.title=active?'Pause white playback area':'Play white playback area';head.playButton.setAttribute('aria-label',head.playButton.title);}
   }
   function buildMix(head,positions){
     const {ctx,arrangements,pixelsPerBeat}=options.audio(),tracks=geometry(head,positions);
@@ -66,7 +67,7 @@ window.createMusicSweeps=function(options){
     head.position=coordinate(head);startSource(head);
   }
   function remove(head){
-    head.epoch++;cancelSource(head);head.element.remove();head.cursor.remove();
+    head.epoch++;cancelSource(head);head.element.remove();head.cursor.remove();head.controls?.remove();
     const index=heads.indexOf(head);if(index!==-1)heads.splice(index,1);
   }
   async function launch(head){
@@ -89,10 +90,17 @@ window.createMusicSweeps=function(options){
     const progress=document.createElement('span');progress.className='canvas-loop-progress';progress.setAttribute('aria-hidden','true');
     const cursor=document.createElement('button');cursor.className='canvas-playhead'+(vertical?' down':'');cursor.setAttribute('aria-label','Stop global playback loop');cursor.title='Stop loop';
     const end=event=>{event.stopPropagation();remove(head);options.changed();};stop.addEventListener('click',end);cursor.addEventListener('click',end);
-    element.appendChild(progress);element.appendChild(stop);head.element=element;head.cursor=cursor;head.progress=progress;head.stopButton=stop;
+    element.appendChild(progress);
+    if(looping&&options.controls){
+      const controls=document.createElement('div');controls.className='white-loop-controls';controls.setAttribute('role','group');controls.setAttribute('aria-label','White playback area');
+      const play=document.createElement('button');play.className='white-loop-play';play.addEventListener('click',event=>{event.stopPropagation();if(head.running||head.loading){pauseHead(head);options.changed();}else void launch(head);});
+      stop.className='white-loop-stop';controls.appendChild(play);controls.appendChild(stop);options.controls.appendChild(controls);head.controls=controls;head.playButton=play;
+    }
+    head.element=element;head.cursor=cursor;head.progress=progress;head.stopButton=stop;
     heads.push(head);options.canvas.appendChild(element);options.canvas.appendChild(cursor);paint(head,options.positions());void launch(head);return head;
   }
-  function pause(looping){heads.filter(head=>looping===undefined||head.looping===looping).forEach(head=>{if(head.running||head.loading){head.position=coordinate(head);head.beat=timelineBeat(head);head.running=false;head.loading=false;head.paused=true;head.epoch++;cancelSource(head);paint(head,options.positions());}});}
+  function pauseHead(head){if(head.running||head.loading){head.position=coordinate(head);head.beat=timelineBeat(head);head.running=false;head.loading=false;head.paused=true;head.epoch++;cancelSource(head);paint(head,options.positions());}}
+  function pause(looping){heads.filter(head=>looping===undefined||head.looping===looping).forEach(pauseHead);}
   function resume(looping){heads.filter(head=>head.paused&&(looping===undefined||head.looping===looping)).forEach(head=>void launch(head));}
   function stop(){heads.slice().forEach(remove);}
   function tick(positions=options.positions()){

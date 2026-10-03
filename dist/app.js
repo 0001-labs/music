@@ -78,7 +78,7 @@ const layout=window.createMusicLayout(rows,(t,vertical)=>{
   playheads[t].style.left='0px';playheads[t].style.top='0px';
 },()=>{if(editHistory&&!editHistory.applying){editHistory.record();syncTrackPresence();}});
 const sweeps=window.createMusicSweeps({
-  canvas:$('#canvas'),positions:()=>layout.getPositions(),baseTempo,totalBeats,audible,
+  canvas:$('#canvas'),controls:$('#global-loop-controls'),positions:()=>layout.getPositions(),baseTempo,totalBeats,audible,
   audio:()=>({ctx,tempo,pixelsPerBeat,arrangements,gains,master}),
   async prepare(){message.textContent='Preparing the audio…';createAudio();await ctx.resume();await loadAudio();},
   startTime(){

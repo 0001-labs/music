@@ -49,3 +49,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .arrangement-button{height:20px;width:20px;padding:0;line-height:20px;background:var(--ink);color:white;font-size:9px}.arrangement-button:hover{background:#444}
 
 .canvas-playhead-track[hidden]{display:none}
+
+#global-loop-controls,.white-loop-controls{display:flex;height:20px;gap:0}.white-loop-controls button{height:20px;width:20px;padding:0;line-height:20px;background:#fff;color:var(--ink);font-size:9px}.white-loop-controls button:hover{background:#eee}
