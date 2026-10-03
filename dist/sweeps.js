@@ -2,8 +2,25 @@
 // A global canvas loop mixes both track orientations on a shared audio-clock timeline.
 window.createMusicSweeps=function(options){
   const {placementStep}=window.musicGrid;
-  const heads=[];let activeSignature='';
+  const heads=[],regionColors=['#e9e4ff','#dceeff','#ffe7ed','#fff0cf','#dff3e5','#f5e4d5','#e0f3f1','#eee7d7'];let activeSignature='',nextRegionColor=0;
   const axis=(p,vertical)=>({start:vertical?p.y:p.x,end:vertical?p.y+p.height:p.x+p.width,cross:vertical?p.x:p.y,span:vertical?p.width:p.height});
+  function regionBounds(head,positions){
+    const tracks=positions.filter(p=>!p.deleted).map(p=>axis(p,head.vertical));
+    const first=tracks.length?Math.min(...tracks.map(p=>p.cross)):head.cross,last=tracks.length?Math.max(...tracks.map(p=>p.cross+p.span)):head.cross+20;
+    return head.vertical?{left:first,top:head.origin,right:last,bottom:head.end}:{left:head.origin,top:first,right:head.end,bottom:last};
+  }
+  function arrangeTabs(positions=options.positions()){
+    const remaining=heads.filter(head=>head.controls),bounds=new Map(remaining.map(head=>[head,regionBounds(head,positions)]));
+    const overlaps=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
+    while(remaining.length){
+      const group=[remaining.shift()];
+      for(let i=0;i<group.length;i++)for(let j=remaining.length-1;j>=0;j--)if(overlaps(bounds.get(group[i]),bounds.get(remaining[j])))group.push(remaining.splice(j,1)[0]);
+      group.sort((a,b)=>heads.indexOf(a)-heads.indexOf(b));
+      const left=Math.min(...group.map(head=>bounds.get(head).left)),right=Math.max(...group.map(head=>bounds.get(head).right)),top=Math.min(...group.map(head=>bounds.get(head).top));
+      const columns=Math.max(1,Math.floor((right-left)/80)),rows=Math.ceil(group.length/columns);
+      group.forEach((head,i)=>{const row=Math.floor(i/columns),count=Math.min(columns,group.length-row*columns);Object.assign(head.controls.style,{left:(right-count*80+i%columns*80)+'px',top:Math.max(20,top-rows*20)+row*20+'px'});});
+    }
+  }
   function timelineBeat(head){
     if(!head.running)return head.beat;
     const {ctx,tempo}=options.audio();
@@ -12,7 +29,7 @@ window.createMusicSweeps=function(options){
   function regionAudible(head){return !head.muted&&(!head.looping||!heads.some(h=>h.looping&&h.solo)||head.solo);}
   function updateRegionGains(){
     heads.forEach(head=>{if(head.gain)head.gain.gain.setTargetAtTime(regionAudible(head)?1:0,options.audio().ctx.currentTime,.012);paint(head,options.positions());});
-    options.changed();
+    arrangeTabs();options.changed();
   }
   function buildTimeline(head,tracks,defaultSpeed){
     const clips=tracks.filter(p=>p.vertical===head.vertical&&options.audible(p.t)&&!head.skipped.has(p.t)&&p.start<head.end&&p.end>head.origin);
@@ -114,7 +131,7 @@ window.createMusicSweeps=function(options){
     if(head.running)rescheduleHead(head,options.positions());
     else if(head.mix){buildMix(head,options.positions());head.position=pixelForBeat(head,head.beat);}
     else head.end=head.customEnd;
-    paint(head,options.positions());options.changed();
+    paint(head,options.positions());arrangeTabs();options.changed();
   }
   function areaResizeHandle(head){
     const handle=document.createElement('button');handle.className='global-loop-resize'+(head.vertical?' down':'');handle.title='Resize white loop end';handle.setAttribute('aria-label','Resize white loop end; use arrow keys');
@@ -141,27 +158,27 @@ window.createMusicSweeps=function(options){
   }
   function add(x,y,vertical=false,looping=true,autoplay=true,savedEnd,savedState={}){
     const origin=Math.max(0,Math.round((vertical?y:x)/placementStep)*placementStep);
-    const head={origin,position:origin,beat:0,cross:Math.max(0,Math.round((vertical?x:y)/placementStep)*placementStep),vertical,looping,muted:!!savedState.muted,solo:!!savedState.solo,startedAt:0,running:false,loading:false,paused:false,epoch:0,voices:[],skipped:new Set(),source:null};
+    const head={origin,position:origin,beat:0,cross:Math.max(0,Math.round((vertical?x:y)/placementStep)*placementStep),vertical,looping,color:regionColors.includes(savedState.color)?savedState.color:(regionColors.find(color=>!heads.some(head=>head.looping&&head.color===color))||regionColors[nextRegionColor++%regionColors.length]),muted:!!savedState.muted,solo:!!savedState.solo,startedAt:0,running:false,loading:false,paused:false,epoch:0,voices:[],skipped:new Set(),source:null};
     const tracks=geometry(head,options.positions());if(savedEnd===undefined&&(!tracks.length||Math.max(...tracks.map(p=>p.end))<=origin))return;
     head.end=savedEnd??Math.max(...tracks.map(p=>p.end));if(looping)head.fixedEnd=head.end;head.paused=!autoplay;
-    const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.hidden=!looping;element.setAttribute('role','group');element.setAttribute('aria-label',looping?'Global playback loop':'Global arrangement playback');
+    const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.style.setProperty('--region-color',head.color);element.hidden=!looping;element.setAttribute('role','group');element.setAttribute('aria-label',looping?'Global playback loop':'Global arrangement playback');
     const stop=document.createElement('button');stop.className='canvas-loop-stop';stop.textContent='■';stop.setAttribute('aria-label','Stop global playback loop');stop.title='Stop loop';
     const progress=document.createElement('span');progress.className='canvas-loop-progress';progress.setAttribute('aria-hidden','true');
     const cursor=document.createElement('button');cursor.className='canvas-playhead'+(vertical?' down':'');cursor.setAttribute('aria-label','Stop global playback loop');cursor.title='Stop loop';
     const end=event=>{event.stopPropagation();remove(head);options.changed();};stop.addEventListener('click',end);cursor.addEventListener('click',end);
     element.appendChild(progress);
     if(looping&&options.controls){
-      const controls=document.createElement('div');controls.className='white-loop-controls';controls.setAttribute('role','group');controls.setAttribute('aria-label','White playback area');
+      const controls=document.createElement('div');controls.className='white-loop-controls';controls.setAttribute('role','group');controls.style.setProperty('--region-color',head.color);controls.setAttribute('aria-label','Loop region playback controls');
       const play=document.createElement('button');play.className='white-loop-play';play.addEventListener('click',event=>{event.stopPropagation();if(head.running||head.loading){pauseHead(head);options.changed();}else void launch(head);});
       stop.className='white-loop-stop';controls.appendChild(play);controls.appendChild(stop);
       for(const [key,label] of [['muted','Mute'],['solo','Solo']]){
         const button=document.createElement('button');button.textContent=label[0];button.title=label+' loop region';button.setAttribute('aria-label',button.title);button.setAttribute('aria-pressed',String(head[key]));
         button.addEventListener('click',event=>{event.stopPropagation();head[key]=!head[key];updateRegionGains();});controls.appendChild(button);head[key==='muted'?'muteButton':'soloButton']=button;
       }
-      options.controls.appendChild(controls);head.controls=controls;head.playButton=play;
+      options.canvas.appendChild(controls);head.controls=controls;head.playButton=play;
     }
     head.element=element;head.cursor=cursor;head.progress=progress;head.stopButton=stop;
-    heads.push(head);updateRegionGains();options.canvas.appendChild(element);options.canvas.appendChild(cursor);if(looping)areaResizeHandle(head);paint(head,options.positions());if(autoplay)void launch(head);else options.changed();return head;
+    heads.push(head);updateRegionGains();options.canvas.appendChild(element);options.canvas.appendChild(cursor);if(looping)areaResizeHandle(head);paint(head,options.positions());arrangeTabs();if(autoplay)void launch(head);else options.changed();return head;
   }
   function pauseHead(head){if(head.running||head.loading){head.position=coordinate(head);head.beat=timelineBeat(head);head.running=false;head.loading=false;head.paused=true;head.epoch++;cancelSource(head);paint(head,options.positions());}}
   function pause(looping){heads.filter(head=>looping===undefined||head.looping===looping).forEach(pauseHead);}
@@ -169,6 +186,7 @@ window.createMusicSweeps=function(options){
   function stop(){heads.slice().forEach(remove);}
   function tick(positions=options.positions()){
     heads.slice().forEach(head=>{if(head.running&&!head.looping&&coordinate(head)>=head.end){remove(head);options.changed();return;}if(head.running&&head.signature!==signature(head,positions))rescheduleHead(head,positions);paint(head,positions);});
+    arrangeTabs(positions);
     const next=positions.map((_,t)=>trackActive(t)).join(',');
     if(next!==activeSignature){activeSignature=next;options.changed();}
   }
@@ -184,5 +202,5 @@ window.createMusicSweeps=function(options){
   function stopTrack(t){heads.forEach(head=>{head.skipped.add(t);if(head.running)rescheduleHead(head,options.positions());});}
   function setTempo(){heads.forEach(head=>{if(head.running){head.position=coordinate(head);head.beat=timelineBeat(head);head.startedAt=Math.max(options.audio().ctx.currentTime,head.startedAt);}});}
   function reschedule(){heads.forEach(head=>{if(head.running)rescheduleHead(head,options.positions());});}
-  return {add,tick,pause,resume,stop,stopTrack,setTempo,reschedule,trackActive,trackLooping:t=>trackPositions(t,true).length>0,trackPositions,hasPlayback:()=>heads.some(head=>head.running||head.loading),hasPaused:()=>heads.some(head=>head.paused),read:()=>heads.map(head=>({direction:head.vertical?'down':'right',cross:head.cross,muted:head.muted,solo:head.solo,start:head.origin,position:coordinate(head),end:head.end,looping:head.looping,beats:head.cycleBeats,playing:head.running,loading:head.loading}))};
+  return {add,tick,pause,resume,stop,stopTrack,setTempo,reschedule,trackActive,trackLooping:t=>trackPositions(t,true).length>0,trackPositions,hasPlayback:()=>heads.some(head=>head.running||head.loading),hasPaused:()=>heads.some(head=>head.paused),read:()=>heads.map(head=>({direction:head.vertical?'down':'right',cross:head.cross,color:head.color,muted:head.muted,solo:head.solo,start:head.origin,position:coordinate(head),end:head.end,looping:head.looping,beats:head.cycleBeats,playing:head.running,loading:head.loading}))};
 };

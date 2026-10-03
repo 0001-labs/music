@@ -67,3 +67,7 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .save-button,#load-arrangement{height:20px;padding:0;line-height:20px;background:#eee;color:var(--ink);font:inherit;font-size:12px;border:0;border-radius:0}.save-button{width:40px}#load-arrangement{width:60px}.save-button:hover,#load-arrangement:hover{background:#ddd}
 
 .white-loop-controls button.muted{background:var(--ink);color:#fff}.white-loop-controls button.soloed{background:#a0ff6b;color:var(--ink)}
+
+.canvas-playhead-track{background:color-mix(in srgb,var(--region-color,#fff) 70%,transparent);border-radius:4px}
+.white-loop-controls{position:absolute;z-index:40;width:80px;border-radius:4px 4px 0 0;overflow:hidden;box-shadow:0 0 0 1px #00000014;background:var(--region-color,#fff)}
+.white-loop-controls button{background:var(--region-color,#fff)}.white-loop-controls button:hover{background:color-mix(in srgb,var(--region-color,#fff) 80%,#fff)}
