@@ -32,9 +32,8 @@ window.createMusicSweeps=function(options){
     const {ctx,arrangements,pixelsPerBeat}=options.audio(),tracks=geometry(head,positions);
     head.end=head.customEnd??head.fixedEnd??Math.max(head.origin+20,...tracks.map(p=>p.end));
     const span=head.end-head.origin;
-    const initialBeats=Math.max(span/pixelsPerBeat,...tracks.map(p=>p.vertical===head.vertical?p.beats*span/(p.end-p.start):p.beats));
-    head.beatPixels??=span/initialBeats;
-    const cycleBeats=head.customEnd!==undefined||head.fixedEnd!==undefined?span/head.beatPixels:Math.max(span/head.beatPixels,...tracks.map(p=>p.vertical===head.vertical?Math.max(0,(p.start-head.origin)/head.beatPixels)+p.beats:p.beats)),rate=arrangements[0].sampleRate;
+    head.beatPixels=pixelsPerBeat;
+    const cycleBeats=span/head.beatPixels,rate=arrangements[0].sampleRate;
     head.cycleBeats=cycleBeats;
     const length=Math.max(1,Math.round(cycleBeats*60/options.baseTempo*rate));
     const mix=ctx.createBuffer(1,length,rate),samples=mix.getChannelData(0);head.voices=[];
