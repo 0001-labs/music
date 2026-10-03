@@ -18,18 +18,22 @@ const colorKey='music-track-colors-v1';
 let trackColors=names.map(()=>null);
 try{const saved=JSON.parse(localStorage.getItem(colorKey));if(Array.isArray(saved)&&saved.length===names.length)trackColors=saved.map(id=>palette.some(color=>color.id===id)?id:null);}catch{}
 const muted=Array(names.length).fill(false),solo=Array(names.length).fill(false);
-const baseTempo=112,totalBeats=32;
+const baseTempo=112,totalBeats=32,pixelsPerBeat=40;
+const loopBeats=names.map(()=>totalBeats);
+const trackPeaks=clips.map(row=>row.flatMap(clip=>clip.peaks));
+const expandedArrangements=names.map(()=>null);
 const $=selector=>document.querySelector(selector);
 const playback=names.map(()=>({running:false,starting:false,beat:0,startedAt:0,epoch:0,source:null}));
 let tempo=112,ctx,master,analyser,gains=[],arrangements,loading,barOrigin=null;
 const play=$('#play'),message=$('#message');
-function waveform(peaks,vertical=false,width=153,height=15){
+function waveform(peaks,vertical=false,width=160,height=16,startPixel=0){
   const length=vertical?height:width,cross=vertical?width:height;
   const count=Math.max(1,Math.floor(length/2)),max=Math.max(...peaks,.001);
-  // Pool measured peaks into fixed two-pixel steps so short lanes retain transients.
+  const samplesPerPixel=peaks.length/(totalBeats*pixelsPerBeat);
+  // Time stays fixed to the paper grid; shortening a lane crops its waveform.
   const bars=Array.from({length:count},(_,i)=>{
-    const start=Math.floor(i*peaks.length/count),end=Math.max(start+1,Math.ceil((i+1)*peaks.length/count));
-    let peak=0;for(let p=start;p<end;p++)peak=Math.max(peak,peaks[p]);
+    const start=Math.floor((startPixel+i*2)*samplesPerPixel),end=Math.max(start+1,Math.ceil((startPixel+i*2+2)*samplesPerPixel));
+    let peak=0;for(let p=start;p<end;p++)peak=Math.max(peak,peaks[p%peaks.length]);
     const amplitude=Math.max(1,Math.round(peak/max*cross*.9)),offset=Math.round((cross-amplitude)/2);
     return vertical?`<rect x="${offset}" y="${i*2}" width="${amplitude}" height="1" fill="currentColor"/>`:`<rect x="${i*2}" y="${offset}" width="1" height="${amplitude}" fill="currentColor"/>`;
   }).join('');
@@ -42,7 +46,7 @@ function trackControls(name,t){
   return `<div class="track-controls"><button data-mute="${t}" aria-label="Mute ${name}" aria-pressed="false" title="Mute ${name}">M</button><button data-solo="${t}" aria-label="Solo ${name}" aria-pressed="false" title="Solo ${name}">S</button></div>`;
 }
 function trackClips(t,vertical=false){
-  return clips[t].map((clip,c)=>`<button class="clip${vertical?' vertical-clip':''}" data-clip="${t},${c}" aria-label="${names[t]}: ${clip.name}. Click to move playhead." title="${clip.name}">${waveform(clip.peaks,vertical)}</button>`).join('');
+  return clips[t].map((clip,c)=>`<button class="clip${vertical?' vertical-clip':''}" data-clip="${t},${c}" aria-label="${names[t]}: ${clip.name}. Click to move playhead." title="${clip.name}"></button>`).join('');
 }
 function resizeHandle(t){return `<button class="resize-handle" data-resize="${t}" aria-label="Resize ${names[t]} waveform; use arrow keys" title="Drag to resize"></button>`;}
 $('#tracks').innerHTML=names.slice(0,6).map((name,t)=>`<div class="track-row track-surface" data-track="${t}">${trackChip(name,t)}<div class="clips" data-timeline="${t}">${trackClips(t)}<div class="playhead" aria-hidden="true" hidden></div></div>${trackControls(name,t)}${resizeHandle(t)}</div>`).join('');
@@ -60,9 +64,15 @@ function updateWaveforms(sizes){
   sizes.forEach(({width,height,vertical},t)=>{
     const key=`${width},${height},${vertical}`;if(waveformSizes[t]===key)return;
     waveformSizes[t]=key;
-    // Clip borders and insets are excluded; SVG units now match physical pixels.
-    const clipWidth=width/(vertical?1:4)-7,clipHeight=height/(vertical?4:1)-(vertical?7:5);
-    cells[t].forEach((cell,c)=>cell.innerHTML=waveform(clips[t][c].peaks,vertical,clipWidth,clipHeight));
+    const length=vertical?height:width,part=length/4;
+    const clipWidth=vertical?width-6:part,clipHeight=vertical?part:height-4;
+    cells[t].forEach((cell,c)=>{
+      cell.innerHTML=waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part);
+      cell.style.backgroundPosition=vertical?`0px ${-c*part}px`:`${-c*part}px 0px`;
+      const clip=clips[t][Math.floor(c*part/(8*pixelsPerBeat))%4];
+      cell.title=clip.name;cell.setAttribute('aria-label',`${names[t]}: ${clip.name}. Click to move playhead.`);
+    });
+    resizeLoop(t,length/pixelsPerBeat);
   });
 }
 function tint(hex,amount){return '#'+[1,3,5].map(index=>Math.round(255*(1-amount)+parseInt(hex.slice(index,index+2),16)*amount).toString(16).padStart(2,'0')).join('');}
@@ -113,8 +123,8 @@ document.addEventListener('keydown',event=>{if(menuTrack!==null&&(event.key==='E
 window.addEventListener('scroll',()=>closeMenu(),{passive:true});window.addEventListener('resize',()=>closeMenu());
 function audible(t){return !muted[t]&&(!solo.some(Boolean)||solo[t]);}
 function updateGain(t){if(gains[t])gains[t].gain.setTargetAtTime(audible(t)?1:0,ctx.currentTime,.012);}
-function currentBeat(t){const state=playback[t];return state.running?(state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60)%totalBeats:state.beat;}
-function snapBeat(beat){return (Math.round(Math.max(0,beat)/4)*4)%totalBeats;}
+function currentBeat(t){const state=playback[t];return state.running?(state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60+1e-9)%loopBeats[t]:state.beat;}
+function snapBeat(beat,t){return Math.min(Math.round(Math.max(0,beat)/4)*4,loopBeats[t])%loopBeats[t];}
 function hasPlayback(){return playback.some(state=>state.running||state.starting);}
 function render(){
   const active=hasPlayback();
@@ -155,6 +165,30 @@ function loadAudio(){
   })).then(result=>arrangements=result).catch(error=>{loading=null;throw error;});
   return loading;
 }
+function bufferForLoop(t){
+  if(loopBeats[t]<=totalBeats)return arrangements[t];
+  const original=arrangements[t],length=Math.round(loopBeats[t]*60/baseTempo*original.sampleRate);
+  const cached=expandedArrangements[t];if(cached?.length===length)return cached;
+  const buffer=ctx.createBuffer(1,length,original.sampleRate),samples=original.getChannelData(0);
+  for(let offset=0;offset<length;offset+=samples.length)buffer.copyToChannel(samples.subarray(0,Math.min(samples.length,length-offset)),0,offset);
+  expandedArrangements[t]=buffer;return buffer;
+}
+function startSource(t,at,beat){
+  const state=playback[t],source=ctx.createBufferSource();source.buffer=bufferForLoop(t);source.loop=true;
+  source.loopStart=0;source.loopEnd=loopBeats[t]*60/baseTempo;
+  source.playbackRate.value=tempo/baseTempo;source.connect(gains[t]);source.start(at,beat*60/baseTempo);
+  state.beat=beat;state.source=source;state.startedAt=at;state.running=true;state.starting=false;
+  source.onended=()=>source.disconnect();
+}
+function resizeLoop(t,beats){
+  if(loopBeats[t]===beats)return;
+  const state=playback[t],beat=currentBeat(t)%beats;loopBeats[t]=beats;
+  if(state.running){
+    const at=Math.max(ctx.currentTime,state.startedAt);
+    try{state.source.stop();}catch{}
+    startSource(t,at,beat);
+  }else state.beat=beat;
+}
 async function startTracks(indices){
   const pending=indices.filter(t=>!playback[t].running&&!playback[t].starting).map(t=>{
     const state=playback[t];state.starting=true;return {t,token:++state.epoch};
@@ -173,12 +207,7 @@ async function startTracks(indices){
     else at=barOrigin+Math.max(0,Math.ceil((earliest-barOrigin)/barSeconds-1e-9))*barSeconds;
     valid.forEach(({t,token})=>{
       const state=playback[t];if(token!==state.epoch)return;
-      const source=ctx.createBufferSource();source.buffer=arrangements[t];source.loop=true;
-      source.playbackRate.value=tempo/baseTempo;source.connect(gains[t]);
-      state.beat=snapBeat(state.beat);
-      source.start(at,state.beat*60/baseTempo);
-      state.source=source;state.startedAt=at;state.running=true;state.starting=false;
-      source.onended=()=>source.disconnect();
+      startSource(t,at,snapBeat(state.beat,t));
     });
     if(!playback.some(state=>state.starting))message.textContent='';
   }catch(error){
@@ -203,14 +232,15 @@ function toggleTrack(t){
 function toggleAll(){if(hasPlayback())pause();else void startTracks(names.map((_,t)=>t));}
 function seekTrack(t,beat){
   const resume=playback[t].running||playback[t].starting;pauseTrack(t);
-  playback[t].beat=snapBeat(Math.min(totalBeats,beat));render();if(resume)void startTracks([t]);
+  playback[t].beat=snapBeat(Math.min(loopBeats[t],beat),t);render();if(resume)void startTracks([t]);
 }
 document.querySelectorAll('[data-track-play]').forEach(button=>button.addEventListener('click',()=>toggleTrack(Number(button.dataset.trackPlay))));
 document.querySelectorAll('[data-clip]').forEach(button=>button.addEventListener('click',event=>{
-  const [t,c]=button.dataset.clip.split(',').map(Number),rect=button.getBoundingClientRect();
-  const vertical=button.classList.contains('vertical-clip');
-  const fraction=event.detail===0?0:Math.max(0,Math.min(1,vertical?(event.clientY-rect.top)/rect.height:(event.clientX-rect.left)/rect.width));
-  seekTrack(t,c*8+fraction*8);
+  const [t,c]=button.dataset.clip.split(',').map(Number),position=layout.getPositions()[t];
+  const rect=rows[t].getBoundingClientRect(),vertical=position.vertical;
+  const length=vertical?position.height:position.width;
+  const pixel=event.detail===0?c*length/4:Math.max(0,Math.min(length,vertical?event.clientY-rect.top:event.clientX-rect.left));
+  seekTrack(t,pixel/pixelsPerBeat);
 }));
 document.querySelectorAll('[data-mute]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.mute);muted[t]=!muted[t];updateGain(t);render();}));
 document.querySelectorAll('[data-solo]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.solo);solo[t]=!solo[t];names.forEach((_,i)=>updateGain(i));render();}));
@@ -225,8 +255,8 @@ function updatePlayhead(){
   const sizes=layout.getPositions();updateWaveforms(sizes);
   playheads.forEach((head,t)=>{
     const beat=currentBeat(t),active=playback[t].running&&audible(t);
-    const vertical=head.classList.contains('vertical-playhead'),length=vertical?sizes[t].height:sizes[t].width;
-    head.style[vertical?'top':'left']=Math.floor(beat/totalBeats*length)+'px';
+    const vertical=head.classList.contains('vertical-playhead');
+    head.style[vertical?'top':'left']=Math.floor(beat*pixelsPerBeat)+'px';
     head.hidden=!active||ctx.currentTime<playback[t].startedAt;
     cells[t].forEach(cell=>cell.classList.toggle('active',active));
   });
@@ -234,7 +264,7 @@ function updatePlayhead(){
 function animate(){layout.tick();updatePlayhead();requestAnimationFrame(animate);}
 if(document.modelContext?.registerTool){
   const lifecycle=new AbortController();
-  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,bars:8,tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),muted:muted[t],solo:solo[t],color:trackColors[t]||'light-green',position:layout.getPositions()[t]}))};}};
+  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,pixelsPerBeat,tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),bars:loopBeats[t]/4,muted:muted[t],solo:solo[t],color:trackColors[t]||'light-green',position:layout.getPositions()[t]}))};}};
   try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }

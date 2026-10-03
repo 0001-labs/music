@@ -26,3 +26,6 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .track-surface{transition:left 150ms cubic-bezier(.2,.7,.2,1),top 150ms cubic-bezier(.2,.7,.2,1)}.track-surface.dragging{transition:none}@media(prefers-reduced-motion:reduce){.track-surface{transition:none}}
 
 .track-surface.selected{outline:1px solid var(--ink);outline-offset:-1px}#selection-marquee{position:absolute;z-index:900;pointer-events:none;border:1px solid var(--ink);background:#1e1e1e08}#selection-marquee[hidden]{display:none}
+
+/* Both orientations share a fixed time scale: eight squares per bar. */
+.clip,.clip:nth-child(2n){border:0;background-color:var(--track-rest,#fafafa);background-image:repeating-linear-gradient(90deg,var(--track-rest,#fafafa) 0 320px,var(--track-alt,#f0f0f0) 320px 640px)}.vertical-track .clip{background-image:repeating-linear-gradient(180deg,var(--track-rest,#fafafa) 0 320px,var(--track-alt,#f0f0f0) 320px 640px)}.clip.active,.clip.active:nth-child(2n){background-image:none;background-color:var(--track-color,var(--accent))}.clip:hover:not(.active){background-image:none;background-color:var(--track-hover,#e2f6dc)}.track-surface::after{content:'';position:absolute;inset:0;border:1px solid var(--line);pointer-events:none;z-index:1}.track-row .waveform{left:0;top:2px}.vertical-track .waveform{left:3px;top:0}
