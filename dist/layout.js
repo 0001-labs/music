@@ -10,7 +10,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
   const minimumSize=vertical=>vertical?{width:80,height:160}:{width:160,height:20};
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
-  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*unit,width:row.classList.contains('vertical-track')?80:640,height:row.classList.contains('vertical-track')?640:row.offsetHeight,vertical:row.classList.contains('vertical-track'),deleted:false,beats:16}));
+  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.classList.contains('vertical-track')?80:640,height:row.classList.contains('vertical-track')?640:4*unit,vertical:row.classList.contains('vertical-track'),deleted:false,beats:16}));
   const defaultPositions=positions.map(p=>({...p}));
   let migrated=false;
   try{
