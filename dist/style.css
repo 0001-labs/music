@@ -3,7 +3,7 @@
 
 body{min-height:100svh;display:flex;flex-direction:column}main{flex-shrink:0}
 
-.timing{display:flex;width:80px;height:20px;gap:0;background:#eee;margin-left:0}.timing .tempo{display:block;width:40px;height:20px;margin:0}.timing .tempo input{display:block;width:40px;height:20px;text-align:center;line-height:20px;padding:0;font-size:14px}.timing .time-signature{display:block;width:40px;height:20px;border-left:1px solid #fff;text-align:center;line-height:20px;font-size:14px;color:var(--ink)}
+.timing{display:flex;width:40px;height:20px;gap:0;background:#eee;margin-left:0}.timing .tempo{display:block;width:40px;height:20px;margin:0}.timing .tempo input{display:block;width:40px;height:20px;text-align:center;line-height:20px;padding:0;font-size:14px}.timing .time-signature{display:block;width:40px;height:20px;border-left:1px solid #fff;text-align:center;line-height:20px;font-size:14px;color:var(--ink)}
 
 .track-name{position:relative;padding:0 32px 0 17px}.track-label{display:block;font-size:12px;opacity:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.track-controls{position:absolute;right:1px;top:1px;width:32px;height:16px;padding:0;gap:0;background:transparent;pointer-events:none}.track-controls button{flex:0 0 16px;width:16px;height:16px;background:#fff;opacity:0;pointer-events:none}.track-controls button+button{border-left:1px solid #ddd}.track-surface:hover .track-controls button,.track-surface:focus-within .track-controls button,.track-controls button[aria-pressed="true"]{opacity:1;pointer-events:auto}.track-controls .muted{background:#333;color:#fff}.track-controls .soloed{background:var(--accent)}@media(hover:none){.track-controls button{opacity:1;pointer-events:auto}}
 
