@@ -20,10 +20,10 @@
   <path d="M65 90 384.4955 59.9027 384.4955 465.5916 65 495.6888Z" fill="#fff" stroke="#d8d8d8" stroke-width=".6" />
   <g transform="matrix(0.9396926208 -0.0885213269 0 0.9659258263 65 90)" fill="#1e1e1e">
     <g data-layout-id="music-title" data-layout-name="Music title" transform="translate(0 0)">
-      <text x="39" y="90" font-size="76">Music</text>
+      <text x="39" y="70" font-size="48">Music</text>
     </g>
     <g data-layout-id="music-publisher" data-layout-name="Publisher" transform="translate(0 0)">
-      <text x="40" y="120" font-size="16">by 0001</text>
+      <text x="40" y="100" font-size="16">by 0001</text>
     </g>
     <g data-layout-id="music-waveforms" data-layout-name="Six track waveforms" transform="translate(0 0)">
       <text x="211" y="180" font-size="10" fill="#777">Kick</text>
