@@ -165,7 +165,7 @@ window.createMusicSweeps=function(options){
     const stop=document.createElement('button');stop.className='canvas-loop-stop';stop.textContent='■';stop.setAttribute('aria-label','Stop global playback loop');stop.title='Stop loop';
     const progress=document.createElement('span');progress.className='canvas-loop-progress';progress.setAttribute('aria-hidden','true');
     const cursor=document.createElement('button');cursor.className='canvas-playhead'+(vertical?' down':'');cursor.setAttribute('aria-label','Stop global playback loop');cursor.title='Stop loop';
-    const end=event=>{event.stopPropagation();remove(head);options.changed();};stop.addEventListener('click',end);cursor.addEventListener('click',end);
+    const end=event=>{event.stopPropagation();remove(head);options.changed();};stop.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stopHead(head);});cursor.addEventListener('click',end);
     element.appendChild(progress);
     if(looping&&options.controls){
       const controls=document.createElement('div');controls.className='white-loop-controls';controls.addEventListener('pointerdown',event=>event.stopPropagation());controls.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();});controls.setAttribute('role','group');controls.style.setProperty('--region-color',head.color);controls.setAttribute('aria-label','Loop region playback controls');
@@ -179,6 +179,11 @@ window.createMusicSweeps=function(options){
     }
     head.element=element;head.cursor=cursor;head.progress=progress;head.stopButton=stop;
     heads.push(head);updateRegionGains();options.canvas.appendChild(element);options.canvas.appendChild(cursor);if(looping)areaResizeHandle(head);paint(head,options.positions());arrangeTabs();if(autoplay)void launch(head);else options.changed();return head;
+  }
+  function stopHead(head){
+    head.epoch++;head.running=false;head.loading=false;head.paused=true;cancelSource(head);
+    head.beat=0;head.position=head.origin;head.startedAt=0;
+    paint(head,options.positions());options.changed();
   }
   function pauseHead(head){if(head.running||head.loading){head.position=coordinate(head);head.beat=timelineBeat(head);head.running=false;head.loading=false;head.paused=true;head.epoch++;cancelSource(head);paint(head,options.positions());}}
   function pause(looping){heads.filter(head=>looping===undefined||head.looping===looping).forEach(pauseHead);}
