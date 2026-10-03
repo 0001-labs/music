@@ -168,7 +168,7 @@ window.createMusicSweeps=function(options){
     const end=event=>{event.stopPropagation();remove(head);options.changed();};stop.addEventListener('click',end);cursor.addEventListener('click',end);
     element.appendChild(progress);
     if(looping&&options.controls){
-      const controls=document.createElement('div');controls.className='white-loop-controls';controls.setAttribute('role','group');controls.style.setProperty('--region-color',head.color);controls.setAttribute('aria-label','Loop region playback controls');
+      const controls=document.createElement('div');controls.className='white-loop-controls';controls.addEventListener('pointerdown',event=>event.stopPropagation());controls.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();});controls.setAttribute('role','group');controls.style.setProperty('--region-color',head.color);controls.setAttribute('aria-label','Loop region playback controls');
       const play=document.createElement('button');play.className='white-loop-play';play.addEventListener('click',event=>{event.stopPropagation();if(head.running||head.loading){pauseHead(head);options.changed();}else void launch(head);});
       stop.className='white-loop-stop';controls.appendChild(play);controls.appendChild(stop);
       for(const [key,label] of [['muted','Mute'],['solo','Solo']]){
