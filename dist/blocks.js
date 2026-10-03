@@ -3,6 +3,7 @@ window.createMusicBlocks=function(options){
   const key='music-arrangement-blocks-v1',step=80,rowStep=20,clone=value=>JSON.parse(JSON.stringify(value));
   let items=[],editing=null,menuTarget=null,selected=null;
   const menu=document.createElement('div');menu.className='context-menu arrangement-block-menu';menu.hidden=true;menu.setAttribute('role','menu');options.canvas.appendChild(menu);
+  const compactControl=document.createElement('button');compactControl.className='arrangement-compact';compactControl.title='Compact arrangement';compactControl.setAttribute('aria-label','Compact arrangement');compactControl.innerHTML='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h4v4M14 14h-4v-4M6 6 2 2M10 10l4 4"/></svg>';compactControl.addEventListener('pointerdown',event=>event.stopPropagation());compactControl.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();});compactControl.addEventListener('click',event=>{event.stopPropagation();compact();});options.canvas.appendChild(compactControl);
   const buttons={};
   for(const [action,label] of [['compact','Compact arrangement'],['open','Open arrangement'],['duplicate','Duplicate block'],['new','New arrangement'],['delete','Delete block']]){
     const button=document.createElement('button');button.textContent=label;button.setAttribute('role','menuitem');menu.appendChild(button);buttons[action]=button;
@@ -21,7 +22,7 @@ window.createMusicBlocks=function(options){
   function stop(){items.forEach(item=>halt(item,true));}
   function paint(item){
     item.element.hidden=!!item.opened;Object.assign(item.element.style,{left:item.x+'px',top:item.y+'px',width:item.width+'px',height:item.height+'px'});
-    item.label.textContent=item.name;item.play.textContent=item.running||item.loading?'Ⅱ':'▶';item.play.title=item.running?'Pause block':'Loop block';item.loop.hidden=!(item.running||options.globalLoop?.(items.indexOf(item)));item.mute.classList.toggle('muted',item.muted);item.soloButton.classList.toggle('soloed',item.solo);item.mute.setAttribute('aria-pressed',String(item.muted));item.soloButton.setAttribute('aria-pressed',String(item.solo));
+    item.label.textContent=item.name;item.label.hidden=!item.name;item.play.textContent=item.running||item.loading?'Ⅱ':'▶';item.play.title=item.running?'Pause block':'Loop block';item.loop.hidden=!(item.running||options.globalLoop?.(items.indexOf(item)));item.mute.classList.toggle('muted',item.muted);item.soloButton.classList.toggle('soloed',item.solo);item.mute.setAttribute('aria-pressed',String(item.muted));item.soloButton.setAttribute('aria-pressed',String(item.solo));
     item.cursor.hidden=!item.running||!audible(item);item.cursor.style.left=Math.floor(phase(item)%item.beats/item.beats*item.width)+'px';item.element.classList.toggle('selected',selected===item.id);
     const signature=item.width+':'+(item.buffer?'ready':'pending');if(item.waveSignature===signature)return;
     const samples=item.buffer?.getChannelData(0),peaks=Array.from({length:Math.max(1,Math.floor(item.width/3))},(_,i)=>{
@@ -59,8 +60,9 @@ window.createMusicBlocks=function(options){
     controls.addEventListener('pointerdown',event=>event.stopPropagation());end.addEventListener('pointerdown',event=>event.stopPropagation());options.canvas.appendChild(element);items.push(item);paint(item);return item;
   }
   function compact(){
+    menu.hidden=true;
     const data=options.capture();delete data.state.blocks;const tracks=data.state.positions.filter(p=>!p.deleted);if(!tracks.length){options.error(new Error('Add or open an arrangement first.'));return;}
-    const name=window.prompt('Name this arrangement block',editing?items.find(p=>p.id===editing)?.name:'Arrangement '+(items.length+1));if(!name?.trim())return;
+    const name='';
     let item=items.find(p=>p.id===editing);const regionStarts=data.state.regions.filter(r=>r.direction==='right').map(r=>r.start),regionEnds=data.state.regions.filter(r=>r.direction==='right').map(r=>r.end);
     const x=Math.floor(Math.min(...tracks.map(p=>p.x),...regionStarts)/step)*step,y=Math.floor(Math.min(...tracks.map(p=>p.y))/rowStep)*rowStep,width=Math.max(step,Math.ceil((Math.max(...tracks.map(p=>p.x+p.width),...regionEnds)-x)/step)*step);
     options.begin();options.clear();
@@ -70,13 +72,16 @@ window.createMusicBlocks=function(options){
   }
   function open(id){const item=items.find(p=>p.id===id);if(!item)return;if(editing&&editing!==id){options.error(new Error('Compact the open arrangement before opening another block.'));return;}options.begin();halt(item,true);item.opened=true;editing=id;const data=clone(item.data),visible=data.state.positions.filter(p=>!p.deleted),regions=data.state.regions.filter(r=>r.direction==='right'),dx=item.x-Math.floor(Math.min(...visible.map(p=>p.x),...regions.map(r=>r.start))/step)*step,dy=item.y-Math.floor(Math.min(...visible.map(p=>p.y))/rowStep)*rowStep;
     data.state.positions.forEach(p=>{p.x=Math.max(0,p.x+dx);p.y=Math.max(0,p.y+dy);});data.state.regions.forEach(r=>{const length=r.end-r.start;r.start=Math.max(0,r.start+(r.direction==='down'?dy:dx));r.end=r.start+length;r.cross=Math.max(0,r.cross+(r.direction==='down'?dx:dy));});options.restore(data);paint(item);persist();options.end();}
-  function duplicate(id){const original=items.find(p=>p.id===id);if(!original)return;const record=clone(snapshot().find(p=>p.id===id));record.id='block-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);record.name+=' copy';record.opened=false;record.x+=record.width;const item=create(record);while(!free(item,item.x,item.y))item.y+=rowStep;paint(item);persist();options.record();}
+  function duplicate(id){const original=items.find(p=>p.id===id);if(!original)return;const record=clone(snapshot().find(p=>p.id===id));record.id='block-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);if(record.name)record.name+=' copy';record.opened=false;record.x+=record.width;const item=create(record);while(!free(item,item.x,item.y))item.y+=rowStep;paint(item);persist();options.record();}
   function remove(id){const item=items.find(p=>p.id===id);if(!item)return;halt(item,true);item.gain?.disconnect();item.element.remove();items=items.filter(p=>p!==item);if(editing===id)editing=null;gains();persist();options.record();}
   function showMenu(event,id=null){menuTarget=id;buttons.compact.hidden=id!==null||!options.positions().some(p=>!p.deleted);buttons.open.hidden=buttons.duplicate.hidden=buttons.delete.hidden=id===null;menu.style.left=(event.clientX+window.scrollX)+'px';menu.style.top=(event.clientY+window.scrollY)+'px';menu.hidden=false;}
   document.addEventListener('contextmenu',event=>{if(event.defaultPrevented||event.target.closest('.transport,.context-menu,.track-surface,.arrangement-block,input,select,textarea'))return;event.preventDefault();showMenu(event);});
   document.addEventListener('pointerdown',event=>{if(!menu.contains(event.target))menu.hidden=true;});
   function restore(records){stop();items.forEach(item=>{item.gain?.disconnect();item.element.remove();});items=[];editing=null;records.forEach(record=>{const item=create(record);if(item.opened)editing=item.id;});persist();}
-  function tick(){items.forEach(paint);}
+  function tick(){
+    items.forEach(paint);const tracks=options.positions().filter(p=>!p.deleted);compactControl.hidden=!tracks.length;if(!tracks.length)return;
+    const regions=options.regions(),right=Math.max(...tracks.map(p=>p.x+p.width),...regions.filter(r=>r.direction==='right').map(r=>r.end)),top=Math.min(...tracks.map(p=>p.y),...regions.filter(r=>r.direction==='down').map(r=>r.start));Object.assign(compactControl.style,{left:(right-20)+'px',top:top+'px'});
+  }
   try{const saved=JSON.parse(localStorage.getItem(key));if(Array.isArray(saved)&&saved.length<=64&&saved.every(options.valid))saved.forEach(record=>{const item=create(record);if(item.opened)editing=item.id;});}catch{}
-  return {compact,open,duplicate,remove,snapshot,restore,tick,bounds,positions:()=>items.map(item=>({x:item.x,y:item.y,width:item.width,height:item.height,beats:item.beats,vertical:false,deleted:item.opened})),buffers:()=>items.map(item=>item.buffer),audible:index=>items[index]?audible(items[index]):false,hasSolo:()=>items.some(p=>p.solo&&!p.opened),hasPlayback:()=>items.some(p=>p.running||p.loading),startAll:()=>items.filter(p=>!p.opened).forEach(item=>void play(item)),pauseAll:()=>items.forEach(pause),stop,prepareAll:()=>Promise.all(items.filter(p=>!p.opened).map(prepare)),setTempo:()=>{items.filter(p=>p.running).forEach(item=>{const beat=phase(item);halt(item);item.beat=beat;source(item,options.audio().ctx.currentTime);});},menu,buttons};
+  return {compactControl,compact,open,duplicate,remove,snapshot,restore,tick,bounds,positions:()=>items.map(item=>({x:item.x,y:item.y,width:item.width,height:item.height,beats:item.beats,vertical:false,deleted:item.opened})),buffers:()=>items.map(item=>item.buffer),audible:index=>items[index]?audible(items[index]):false,hasSolo:()=>items.some(p=>p.solo&&!p.opened),hasPlayback:()=>items.some(p=>p.running||p.loading),startAll:()=>items.filter(p=>!p.opened).forEach(item=>void play(item)),pauseAll:()=>items.forEach(pause),stop,prepareAll:()=>Promise.all(items.filter(p=>!p.opened).map(prepare)),setTempo:()=>{items.filter(p=>p.running).forEach(item=>{const beat=phase(item);halt(item);item.beat=beat;source(item,options.audio().ctx.currentTime);});},menu,buttons};
 };
