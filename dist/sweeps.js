@@ -9,10 +9,33 @@ window.createMusicSweeps=function(options){
     const {ctx,tempo}=options.audio();
     return head.beat+Math.max(0,ctx.currentTime-head.startedAt)*tempo/60;
   }
+  function buildTimeline(head,tracks,defaultSpeed){
+    const clips=tracks.filter(p=>p.vertical===head.vertical&&options.audible(p.t)&&!head.skipped.has(p.t)&&p.start<head.end&&p.end>head.origin);
+    const edges=Array.from(new Set([head.origin,head.end,...clips.flatMap(p=>[Math.max(head.origin,p.start),Math.min(head.end,p.end)])])).sort((a,b)=>a-b);
+    const nearest=(a,b)=>Math.abs(a.cross-head.cross)-Math.abs(b.cross-head.cross)||a.t-b.t;
+    let beat=0;head.timeline=[];
+    for(let i=0;i<edges.length-1;i++){
+      const start=edges[i],end=edges[i+1];
+      const active=clips.filter(p=>p.start<=start&&p.end>start).sort((a,b)=>b.start-a.start||nearest(a,b));
+      const upcoming=clips.filter(p=>p.start>start).sort((a,b)=>a.start-b.start||nearest(a,b));
+      const previous=clips.filter(p=>p.end<=start).sort((a,b)=>b.end-a.end||nearest(a,b));
+      const clip=active[0]||upcoming[0]||previous[0],speed=clip?(clip.end-clip.start)/clip.beats:defaultSpeed;
+      const beats=(end-start)/speed;head.timeline.push({start,end,beat,beats,speed});beat+=beats;
+    }
+    head.cycleBeats=beat;
+  }
+  function pixelForBeat(head,beat){
+    const phase=head.looping?beat%head.cycleBeats:Math.min(head.cycleBeats,beat);
+    const segment=head.timeline.find(p=>phase<p.beat+p.beats)||head.timeline.at(-1);
+    return segment?Math.min(segment.end,segment.start+Math.max(0,phase-segment.beat)*segment.speed):head.origin;
+  }
+  function beatForPixel(head,pixel){
+    if(pixel<=head.origin)return 0;if(pixel>=head.end)return head.cycleBeats;
+    const segment=head.timeline.find(p=>pixel<p.end);return segment.beat+(pixel-segment.start)/segment.speed;
+  }
   function coordinate(head){
     const span=head.end-head.origin;if(!head.running||span<=0)return head.position;
-    const beat=timelineBeat(head),phase=head.looping?beat%head.cycleBeats:Math.min(head.cycleBeats,beat);
-    return head.origin+phase/head.cycleBeats*span;
+    return pixelForBeat(head,timelineBeat(head));
   }
   function cancelSource(head){if(head.source){try{head.source.stop();}catch{}head.source=null;}}
   function geometry(head,positions){return positions.map((p,t)=>({...axis(p,head.vertical),t,vertical:p.vertical,beats:p.beats,deleted:p.deleted})).filter(p=>!p.deleted&&(p.vertical!==head.vertical||p.end>head.origin));}
@@ -32,14 +55,13 @@ window.createMusicSweeps=function(options){
     const {ctx,arrangements,pixelsPerBeat}=options.audio(),tracks=geometry(head,positions);
     head.end=head.customEnd??head.fixedEnd??Math.max(head.origin+20,...tracks.map(p=>p.end));
     const span=head.end-head.origin;
-    head.beatPixels=pixelsPerBeat;
-    const cycleBeats=span/head.beatPixels,rate=arrangements[0].sampleRate;
-    head.cycleBeats=cycleBeats;
+    buildTimeline(head,tracks,pixelsPerBeat);
+    const cycleBeats=head.cycleBeats,rate=arrangements[0].sampleRate;
     const length=Math.max(1,Math.round(cycleBeats*60/options.baseTempo*rate));
     const mix=ctx.createBuffer(1,length,rate),samples=mix.getChannelData(0);head.voices=[];
     tracks.forEach(p=>{
       if(head.skipped.has(p.t))return;
-      const startBeat=p.vertical===head.vertical?Math.max(0,(p.start-head.origin)/head.beatPixels):0;
+      const startBeat=p.vertical===head.vertical?beatForPixel(head,p.start):0;
       const offsetBeat=p.vertical===head.vertical?Math.max(0,(head.origin-p.start)/(p.end-p.start)*p.beats):0;
       const durationBeats=Math.min(p.beats-offsetBeat,cycleBeats-startBeat);if(durationBeats<=0)return;
       head.voices.push({t:p.t,startBeat,offsetBeat,durationBeats});
@@ -83,7 +105,7 @@ window.createMusicSweeps=function(options){
   function resizeArea(head,end){
     head.customEnd=Math.max(head.origin+placementStep,Math.round(end/placementStep)*placementStep);
     if(head.running)rescheduleHead(head,options.positions());
-    else if(head.mix){buildMix(head,options.positions());head.position=head.origin+(head.beat%head.cycleBeats)/head.cycleBeats*(head.end-head.origin);}
+    else if(head.mix){buildMix(head,options.positions());head.position=pixelForBeat(head,head.beat);}
     else head.end=head.customEnd;
     paint(head,options.positions());options.changed();
   }
@@ -97,7 +119,7 @@ window.createMusicSweeps=function(options){
     handle.addEventListener('pointermove',event=>{if(!drag||event.pointerId!==drag.id)return;event.preventDefault();event.stopPropagation();resizeArea(head,drag.end+(head.vertical?event.clientY+window.scrollY:event.clientX+window.scrollX)-drag.start);});
     function finish(cancel){
       if(!drag)return;const previous=drag;drag=null;
-      if(cancel){head.customEnd=previous.customEnd;if(head.running)rescheduleHead(head,options.positions());else if(head.mix){buildMix(head,options.positions());head.position=head.origin+(head.beat%head.cycleBeats)/head.cycleBeats*(head.end-head.origin);}else head.end=previous.end;paint(head,options.positions());options.changed();}
+      if(cancel){head.customEnd=previous.customEnd;if(head.running)rescheduleHead(head,options.positions());else if(head.mix){buildMix(head,options.positions());head.position=pixelForBeat(head,head.beat);}else head.end=previous.end;paint(head,options.positions());options.changed();}
       if(handle.hasPointerCapture(previous.id))handle.releasePointerCapture(previous.id);
     }
     handle.addEventListener('pointerup',event=>{event.stopPropagation();finish(false);});
@@ -142,7 +164,7 @@ window.createMusicSweeps=function(options){
     const now=options.audio().ctx?.currentTime;
     return heads.flatMap(head=>{
       if(!head.running||now<head.startedAt||looping!==undefined&&head.looping!==looping)return [];
-      const phase=(coordinate(head)-head.origin)/(head.end-head.origin)*head.cycleBeats;
+      const elapsed=timelineBeat(head),phase=head.looping?elapsed%head.cycleBeats:Math.min(head.cycleBeats,elapsed);
       return head.voices.filter(voice=>voice.t===t&&phase>=voice.startBeat&&phase<voice.startBeat+voice.durationBeats).map(voice=>voice.offsetBeat+phase-voice.startBeat);
     });
   }
