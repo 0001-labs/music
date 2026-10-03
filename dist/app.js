@@ -1,7 +1,7 @@
 'use strict';
 // Each horizontal or vertical track owns its source and playback position.
 const clips=window.MUSIC_CLIPS;
-const names=['Kick','Snare','Hats','Bass','Keys','Air','Pulse'];
+const names=['Kick','Snare','Hats','Bass','Keys','Air','Pulse','Piano'];
 // Ezo note colors, from shared/noteAppearance.ts.
 const palette=[
   {id:'white',name:'White',hex:'#ffffff'},
@@ -16,7 +16,7 @@ const palette=[
 ];
 const colorKey='music-track-colors-v1';
 let trackColors=names.map(()=>null);
-try{const saved=JSON.parse(localStorage.getItem(colorKey));if(Array.isArray(saved)&&saved.length===names.length)trackColors=saved.map(id=>palette.some(color=>color.id===id)?id:null);}catch{}
+try{const saved=JSON.parse(localStorage.getItem(colorKey));if(Array.isArray(saved)&&saved.length<=names.length)trackColors=names.map((_,t)=>palette.some(color=>color.id===saved[t])?saved[t]:null);}catch{}
 const muted=Array(names.length).fill(false),solo=Array(names.length).fill(false);
 const baseTempo=112,totalBeats=32,pixelsPerBeat=40;
 const loopBeats=names.map(()=>totalBeats);
@@ -61,6 +61,7 @@ function resizeHandle(t){return `<button class="resize-handle" data-resize="${t}
 function trimHandle(t){return `<button class="trim-handle" data-trim="${t}" aria-label="Trim ${names[t]} loop; use arrow keys" title="Trim loop end"></button>`;}
 $('#tracks').innerHTML=names.slice(0,6).map((name,t)=>`<div class="track-row track-surface" data-track="${t}">${trackChip(name,t)}<div class="clips" data-timeline="${t}">${trackClips(t)}<div class="playhead" aria-hidden="true" hidden></div></div>${trackControls(name,t)}${resizeHandle(t)}${trimHandle(t)}</div>`).join('');
 $('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-track="6">${trackChip(names[6],6)}<div class="vertical-lane"><div class="vertical-clips" data-timeline="6">${trackClips(6,true)}</div><div class="playhead vertical-playhead" aria-hidden="true" hidden></div></div>${trackControls(names[6],6)}${resizeHandle(6)}${trimHandle(6)}</div>`;
+$('#piano-track').innerHTML=`<div class="track-row track-surface" data-track="7" style="height:160px">${trackChip(names[7],7)}<div class="clips" data-timeline="7">${trackClips(7)}<div class="playhead" aria-hidden="true" hidden></div></div>${trackControls(names[7],7)}${resizeHandle(7)}${trimHandle(7)}</div>`;
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
@@ -169,6 +170,66 @@ function clipNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb){
   if(!vertical)return `<svg class="notation" viewBox="0 0 ${timePx} ${pitchPx}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">${inner}</svg>`;
   return `<svg class="notation" viewBox="0 0 ${pitchPx} ${timePx}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true"><g transform="translate(${pitchPx} 0) rotate(90)">${inner}</g></svg>`;
 }
+function notationEvents(track,startBeat,beatCount){
+  const notes=[],end=startBeat+beatCount;
+  for(let origin=Math.floor(startBeat/8)*8;origin<end;origin+=8){
+    const clip=clips[track][((Math.floor(origin/8)%4)+4)%4];
+    (clip.notes||[]).forEach(note=>{const beat=origin+note.beat;if(beat>=startBeat-1e-6&&beat<end-1e-6)notes.push({...note,beat});});
+  }
+  return notes;
+}
+function notationSvg(body,vertical,timePx,pitchPx,kind){
+  return `<svg class="notation ${kind}" viewBox="0 0 ${vertical?pitchPx:timePx} ${vertical?timePx:pitchPx}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">${vertical?`<g transform="translate(${pitchPx} 0) rotate(90)">${body}</g>`:body}</svg>`;
+}
+function percussionNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb){
+  const staff=pitchPx>=80,bottom=pitchPx/2+24,step=6;
+  const y=staff?bottom-[1,5,9][track]*step:pitchPx/2;
+  let body='';
+  if(staff)for(let line=0;line<5;line++)body+=`<line x1="0" y1="${bottom-line*step*2}" x2="${timePx}" y2="${bottom-line*step*2}" stroke="currentColor" stroke-width="1"/>`;
+  notationEvents(track,startBeat,beatCount).forEach(note=>{
+    const x=(note.beat-startBeat)*ppb+ppb/4,r=track===2?3.5:4.5;
+    if(track===2){
+      body+=`<path class="drum-cross" d="M${x-r} ${y-r} l${r*2} ${r*2} M${x-r} ${y+r} l${r*2} ${-r*2}" fill="none" stroke="currentColor" stroke-width="1.4"/>`;
+      if(clips[track][Math.floor(note.beat/8)%4].name==='Open hats'&&(note.beat%1)>.1)body+=`<circle cx="${x}" cy="${y-8}" r="2" fill="none" stroke="currentColor"/>`;
+    }else body+=`<ellipse class="drum-hit" cx="${x}" cy="${y}" rx="${r}" ry="3.2" transform="rotate(-18 ${x} ${y})" fill="currentColor"/>`;
+    if(staff){
+      const up=track!==2,sx=x+(up?r:-r),end=y+(up?-24:24);
+      body+=`<line x1="${sx}" y1="${y}" x2="${sx}" y2="${end}" stroke="currentColor" stroke-width="1.2"/>`;
+      for(let flag=0;flag<(note.dur<.5?2:note.dur<1?1:0);flag++){
+        const fy=end+(up?flag*5:-flag*5);
+        body+=`<path d="M${sx} ${fy} q7 ${up?3:-3} 4 ${up?12:-12}" fill="none" stroke="currentColor" stroke-width="1.2"/>`;
+      }
+    }
+  });
+  return notationSvg(body,vertical,timePx,pitchPx,'drum-notation');
+}
+function pianoNotation(vertical,timePx,pitchPx,startBeat,beatCount,ppb){
+  const staff=pitchPx>=80,grand=pitchPx>=160,spacing=7,trebleBottom=grand?pitchPx/2-6:pitchPx-8,bassBottom=pitchPx-28;
+  let body='';
+  if(staff){
+    for(const bottom of grand?[trebleBottom,bassBottom]:[trebleBottom])for(let line=0;line<5;line++)body+=`<line x1="0" y1="${bottom-line*spacing*2}" x2="${timePx}" y2="${bottom-line*spacing*2}" stroke="currentColor" stroke-width="1"/>`;
+  }
+  notationEvents(7,startBeat,beatCount).filter(note=>grand||note.voice==='treble').forEach(note=>{
+    const pitch=spellPitch(note.pitch),bass=note.voice==='bass',bottom=bass?bassBottom:trebleBottom,reference=bass?-10:2;
+    const position=pitch.step-reference,x=(note.beat-startBeat)*ppb+ppb/4,y=staff?bottom-position*spacing:pitchPx/2;
+    if(staff){
+      const up=position<4,sx=x+(up?4:-4),end=y+(up?-24:24);
+      body+=`<line x1="${sx}" y1="${y}" x2="${sx}" y2="${end}" stroke="currentColor" stroke-width="1.2"/>`;
+      if(note.dur<1)body+=`<path d="M${sx} ${end} q7 ${up?3:-3} 4 ${up?12:-12}" fill="none" stroke="currentColor" stroke-width="1.2"/>`;
+      if(pitch.name.endsWith('#'))body+=`<text x="${x-10}" y="${y+4}" font-size="12" fill="currentColor">♯</text>`;
+      for(let ledger=position<0?-2:10;position<0?ledger>=position:ledger<=position;ledger+=position<0?-2:2){
+        const ly=bottom-ledger*spacing;body+=`<line x1="${x-7}" y1="${ly}" x2="${x+7}" y2="${ly}" stroke="currentColor" stroke-width="1"/>`;
+      }
+    }
+    body+=`<ellipse class="piano-note ${note.voice}" cx="${x}" cy="${y}" rx="4.5" ry="3.2" transform="rotate(-18 ${x} ${y})" fill="currentColor"/>`;
+  });
+  return notationSvg(body,vertical,timePx,pitchPx,'piano-notation');
+}
+function trackNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb){
+  if(track<3)return percussionNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb);
+  if(track===7)return pianoNotation(vertical,timePx,pitchPx,startBeat,beatCount,ppb);
+  return clipNotation(track,vertical,timePx,pitchPx,startBeat,beatCount,ppb);
+}
 const viewToggle=$('#track-view'),viewKey='music-track-view-v1';
 let trackView='waveform';
 try{if(localStorage.getItem(viewKey)==='notation')trackView='notation';}catch{}
@@ -194,7 +255,7 @@ function updateWaveforms(sizes){
     rows[t].style.setProperty('--clip-span',8*displayPixelsPerBeat+'px');
     const clipWidth=vertical?width-6:part,clipHeight=vertical?part:height-4;
     cells[t].forEach((cell,c)=>{
-      cell.innerHTML=trackView==='notation'&&pitchPatterns[t]?clipNotation(t,vertical,part,vertical?width:height,c*beats/4,beats/4,displayPixelsPerBeat):waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part,displayPixelsPerBeat);
+      cell.innerHTML=trackView==='notation'&&(t<3||t===7||pitchPatterns[t])?trackNotation(t,vertical,part,vertical?width:height,c*beats/4,beats/4,displayPixelsPerBeat):waveform(trackPeaks[t],vertical,clipWidth,clipHeight,c*part,displayPixelsPerBeat);
       cell.style.backgroundPosition=vertical?`0px ${-c*part}px`:`${-c*part}px 0px`;
       const clip=clips[t][Math.floor(c*part/(8*displayPixelsPerBeat))%4];
       cell.title=clip.name;cell.setAttribute('aria-label',`${names[t]}: ${clip.name}. Click to move playhead.`);

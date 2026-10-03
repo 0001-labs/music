@@ -11,10 +11,12 @@ window.createMusicLayout=function(rows,onOrientationChange){
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
   let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
+  positions.slice(7).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,7+t).map(item=>item.y+item.height))/placementStep)*placementStep;});
   let migrated=false;
   try{
     const saved=JSON.parse(localStorage.getItem(key));
-    if(Array.isArray(saved)&&saved.length===rows.length&&saved.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.y>=0&&p.x<=100000&&p.y<=100000))positions=saved.map((p,t)=>{
+    if(Array.isArray(saved)&&saved.length>0&&saved.length<=rows.length&&saved.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.y>=0&&p.x<=100000&&p.y<=100000))positions=positions.map((initial,t)=>{
+      const p=saved[t];if(!p){migrated=true;return initial;}
       const vertical=typeof p.vertical==='boolean'?p.vertical:positions[t].vertical;
       const hasBeats=Number.isFinite(p.beats)&&p.beats>=2&&p.beats<=2500;
       const dimension=(axis,value)=>Number.isFinite(value)&&value<=100000?(hasBeats?Math.max(minimumSize(vertical)[axis],snap(value)):sizeSnap(t,axis,value,vertical)):positions[t][axis];
@@ -23,6 +25,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
       if(x!==p.x||y!==p.y)migrated=true;
       return {x,y,vertical,width,height,beats:hasBeats?p.beats:(vertical?height:width)/40};
     });
+    if(migrated&&Array.isArray(saved)&&saved.length>0&&saved.length<rows.length)positions.slice(saved.length).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,saved.length+t).map(item=>item.y+item.height))/placementStep)*placementStep;});
   }catch{}
   let drag=null,marquee=null,suppressClick=null,layer=10;
   const selected=new Set(),selectionBox=document.querySelector('#selection-marquee');
