@@ -582,7 +582,7 @@ function validArrangement(data){
   const visible=state.positions.filter(p=>!p.deleted);if(visible.some((p,i)=>visible.slice(i+1).some(q=>p.x<q.x+q.width&&p.x+p.width>q.x&&p.y<q.y+q.height&&p.y+p.height>q.y)))throw new Error('Arrangement tracks overlap.');
   if(!Array.isArray(state.colors)||state.colors.length!==n||!state.colors.every(c=>c===null||palette.some(p=>p.id===c))||!Array.isArray(state.pitches)||state.pitches.length!==n||!state.pitches.every(p=>Number.isInteger(p)&&Math.abs(p)<=24))throw new Error('Invalid track settings.');
   if(!['muted','solo'].every(key=>Array.isArray(state[key])&&state[key].length===n&&state[key].every(v=>typeof v==='boolean'))||!['waveform','notation'].includes(state.view))throw new Error('Invalid playback settings.');
-  if(!Array.isArray(state.regions)||state.regions.length>32||!state.regions.every(r=>r&&['right','down'].includes(r.direction)&&[r.start,r.end,r.cross].every(finite)&&r.end>=r.start+80))throw new Error('Invalid loop regions.');
+  if(!Array.isArray(state.regions)||state.regions.length>32||!state.regions.every(r=>r&&['right','down'].includes(r.direction)&&[r.start,r.end,r.cross].every(finite)&&r.end>=r.start+80&&[r.muted,r.solo].every(v=>v===undefined||typeof v==='boolean')))throw new Error('Invalid loop regions.');
   return data;
 }
 try{const data=JSON.parse(localStorage.getItem(arrangementKey));if(Array.isArray(data))savedArrangements=data.slice(0,50).filter(item=>{try{validArrangement(item);return true;}catch{return false;}});}catch{}
@@ -592,7 +592,7 @@ function refreshArrangementLibrary(){
   const file=document.createElement('option');file.value='file';file.textContent='Open file…';loadSelect.appendChild(file);loadSelect.value='';
 }
 function captureArrangement(name){
-  return {format:'music-arrangement',version:1,name,state:{tempo,positions:layout.getPositions(),colors:[...trackColors],pitches:[...pitches],muted:[...muted],solo:[...solo],view:trackView,regions:sweeps.read().filter(head=>head.looping).map(head=>({direction:head.direction,start:head.start,end:head.end,cross:head.cross}))}};
+  return {format:'music-arrangement',version:1,name,state:{tempo,positions:layout.getPositions(),colors:[...trackColors],pitches:[...pitches],muted:[...muted],solo:[...solo],view:trackView,regions:sweeps.read().filter(head=>head.looping).map(head=>({direction:head.direction,start:head.start,end:head.end,cross:head.cross,muted:head.muted,solo:head.solo}))}};
 }
 function rememberArrangement(data){
   const index=savedArrangements.findIndex(item=>item.name===data.name);if(index<0)savedArrangements.unshift(data);else savedArrangements[index]=data;savedArrangements=savedArrangements.slice(0,50);
@@ -605,7 +605,7 @@ function loadArrangement(data){
   muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);trackColors=[...state.colors];trackView=state.view;
   names.forEach((_,t)=>applyTrackColor(t));layout.restore(state.positions);renderViewToggle();
   try{localStorage.setItem(colorKey,JSON.stringify(trackColors));localStorage.setItem(pitchKey,JSON.stringify(pitches));localStorage.setItem(viewKey,trackView);}catch{}
-  state.regions.forEach(r=>sweeps.add(r.direction==='down'?r.cross:r.start,r.direction==='down'?r.start:r.cross,r.direction==='down',true,false,r.end));
+  state.regions.forEach(r=>sweeps.add(r.direction==='down'?r.cross:r.start,r.direction==='down'?r.start:r.cross,r.direction==='down',true,false,r.end,r));
   syncTrackPresence();editHistory.record();message.textContent=`Loaded ${data.name}`;
 }
 $('#save-arrangement').addEventListener('click',()=>{

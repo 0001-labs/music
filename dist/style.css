@@ -65,3 +65,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .track-pitch-handle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:8;min-width:16px;height:16px;padding:0 2px;line-height:16px;font-size:10px;background:#ffffffdd;border-radius:3px;cursor:ns-resize;touch-action:none;opacity:0}.track-surface:hover .track-pitch-handle,.track-surface:focus-within .track-pitch-handle,.track-pitch-handle[data-active="true"]{opacity:1}
 
 .save-button,#load-arrangement{height:20px;padding:0;line-height:20px;background:#eee;color:var(--ink);font:inherit;font-size:12px;border:0;border-radius:0}.save-button{width:40px}#load-arrangement{width:60px}.save-button:hover,#load-arrangement:hover{background:#ddd}
+
+.white-loop-controls button.muted{background:var(--ink);color:#fff}.white-loop-controls button.soloed{background:#a0ff6b;color:var(--ink)}
