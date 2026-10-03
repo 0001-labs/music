@@ -132,11 +132,11 @@ window.createMusicSweeps=function(options){
     });
     head.resizeHandle=handle;options.canvas.appendChild(handle);
   }
-  function add(x,y,vertical=false,looping=true){
+  function add(x,y,vertical=false,looping=true,autoplay=true,savedEnd){
     const origin=Math.max(0,Math.round((vertical?y:x)/placementStep)*placementStep);
     const head={origin,position:origin,beat:0,cross:Math.max(0,Math.round((vertical?x:y)/placementStep)*placementStep),vertical,looping,startedAt:0,running:false,loading:false,paused:false,epoch:0,voices:[],skipped:new Set(),source:null};
-    const tracks=geometry(head,options.positions());if(!tracks.length||Math.max(...tracks.map(p=>p.end))<=origin)return;
-    head.end=Math.max(...tracks.map(p=>p.end));if(looping)head.fixedEnd=head.end;
+    const tracks=geometry(head,options.positions());if(savedEnd===undefined&&(!tracks.length||Math.max(...tracks.map(p=>p.end))<=origin))return;
+    head.end=savedEnd??Math.max(...tracks.map(p=>p.end));if(looping)head.fixedEnd=head.end;head.paused=!autoplay;
     const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.hidden=!looping;element.setAttribute('role','group');element.setAttribute('aria-label',looping?'Global playback loop':'Global arrangement playback');
     const stop=document.createElement('button');stop.className='canvas-loop-stop';stop.textContent='■';stop.setAttribute('aria-label','Stop global playback loop');stop.title='Stop loop';
     const progress=document.createElement('span');progress.className='canvas-loop-progress';progress.setAttribute('aria-hidden','true');
@@ -149,7 +149,7 @@ window.createMusicSweeps=function(options){
       stop.className='white-loop-stop';controls.appendChild(play);controls.appendChild(stop);options.controls.appendChild(controls);head.controls=controls;head.playButton=play;
     }
     head.element=element;head.cursor=cursor;head.progress=progress;head.stopButton=stop;
-    heads.push(head);options.canvas.appendChild(element);options.canvas.appendChild(cursor);if(looping)areaResizeHandle(head);paint(head,options.positions());void launch(head);return head;
+    heads.push(head);options.canvas.appendChild(element);options.canvas.appendChild(cursor);if(looping)areaResizeHandle(head);paint(head,options.positions());if(autoplay)void launch(head);else options.changed();return head;
   }
   function pauseHead(head){if(head.running||head.loading){head.position=coordinate(head);head.beat=timelineBeat(head);head.running=false;head.loading=false;head.paused=true;head.epoch++;cancelSource(head);paint(head,options.positions());}}
   function pause(looping){heads.filter(head=>looping===undefined||head.looping===looping).forEach(pauseHead);}
@@ -172,5 +172,5 @@ window.createMusicSweeps=function(options){
   function stopTrack(t){heads.forEach(head=>{head.skipped.add(t);if(head.running)rescheduleHead(head,options.positions());});}
   function setTempo(){heads.forEach(head=>{if(head.running){head.position=coordinate(head);head.beat=timelineBeat(head);head.startedAt=Math.max(options.audio().ctx.currentTime,head.startedAt);}});}
   function reschedule(){heads.forEach(head=>{if(head.running)rescheduleHead(head,options.positions());});}
-  return {add,tick,pause,resume,stop,stopTrack,setTempo,reschedule,trackActive,trackLooping:t=>trackPositions(t,true).length>0,trackPositions,hasPlayback:()=>heads.some(head=>head.running||head.loading),hasPaused:()=>heads.some(head=>head.paused),read:()=>heads.map(head=>({direction:head.vertical?'down':'right',start:head.origin,position:coordinate(head),end:head.end,looping:head.looping,beats:head.cycleBeats,playing:head.running,loading:head.loading}))};
+  return {add,tick,pause,resume,stop,stopTrack,setTempo,reschedule,trackActive,trackLooping:t=>trackPositions(t,true).length>0,trackPositions,hasPlayback:()=>heads.some(head=>head.running||head.loading),hasPaused:()=>heads.some(head=>head.paused),read:()=>heads.map(head=>({direction:head.vertical?'down':'right',cross:head.cross,start:head.origin,position:coordinate(head),end:head.end,looping:head.looping,beats:head.cycleBeats,playing:head.running,loading:head.loading}))};
 };

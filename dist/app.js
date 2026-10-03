@@ -572,4 +572,51 @@ document.addEventListener('keydown',event=>{
     if(menuTrack!==null||layout.getSelection().length){event.preventDefault();deleteSelectedTracks(menuTrack);}
   }
 });
+const arrangementKey='music-saved-arrangements-v1',loadSelect=$('#load-arrangement'),fileInput=$('#arrangement-file');
+let savedArrangements=[];
+function validArrangement(data){
+  if(!data||data.format!=='music-arrangement'||data.version!==1||typeof data.name!=='string'||data.name.length>120)throw new Error('This is not a Music arrangement file.');
+  const state=data.state,n=names.length,finite=value=>Number.isFinite(value)&&value>=0&&value<=100000;
+  if(!state||!Number.isFinite(state.tempo)||state.tempo<70||state.tempo>160||!Array.isArray(state.positions)||state.positions.length!==n)throw new Error('Invalid arrangement.');
+  if(!state.positions.every(p=>p&&[p.x,p.y,p.width,p.height].every(finite)&&p.width>=80&&p.height>=20&&typeof p.vertical==='boolean'&&typeof p.deleted==='boolean'&&Number.isInteger(p.beats)&&p.beats>=16&&p.beats<=2496&&p.beats%16===0))throw new Error('Invalid track positions.');
+  const visible=state.positions.filter(p=>!p.deleted);if(visible.some((p,i)=>visible.slice(i+1).some(q=>p.x<q.x+q.width&&p.x+p.width>q.x&&p.y<q.y+q.height&&p.y+p.height>q.y)))throw new Error('Arrangement tracks overlap.');
+  if(!Array.isArray(state.colors)||state.colors.length!==n||!state.colors.every(c=>c===null||palette.some(p=>p.id===c))||!Array.isArray(state.pitches)||state.pitches.length!==n||!state.pitches.every(p=>Number.isInteger(p)&&Math.abs(p)<=24))throw new Error('Invalid track settings.');
+  if(!['muted','solo'].every(key=>Array.isArray(state[key])&&state[key].length===n&&state[key].every(v=>typeof v==='boolean'))||!['waveform','notation'].includes(state.view))throw new Error('Invalid playback settings.');
+  if(!Array.isArray(state.regions)||state.regions.length>32||!state.regions.every(r=>r&&['right','down'].includes(r.direction)&&[r.start,r.end,r.cross].every(finite)&&r.end>=r.start+80))throw new Error('Invalid loop regions.');
+  return data;
+}
+try{const data=JSON.parse(localStorage.getItem(arrangementKey));if(Array.isArray(data))savedArrangements=data.slice(0,50).filter(item=>{try{validArrangement(item);return true;}catch{return false;}});}catch{}
+function refreshArrangementLibrary(){
+  loadSelect.innerHTML='';const option=document.createElement('option');option.value='';option.textContent='Load';loadSelect.appendChild(option);
+  savedArrangements.forEach((data,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=data.name;loadSelect.appendChild(option);});
+  const file=document.createElement('option');file.value='file';file.textContent='Open file…';loadSelect.appendChild(file);loadSelect.value='';
+}
+function captureArrangement(name){
+  return {format:'music-arrangement',version:1,name,state:{tempo,positions:layout.getPositions(),colors:[...trackColors],pitches:[...pitches],muted:[...muted],solo:[...solo],view:trackView,regions:sweeps.read().filter(head=>head.looping).map(head=>({direction:head.direction,start:head.start,end:head.end,cross:head.cross}))}};
+}
+function rememberArrangement(data){
+  const index=savedArrangements.findIndex(item=>item.name===data.name);if(index<0)savedArrangements.unshift(data);else savedArrangements[index]=data;savedArrangements=savedArrangements.slice(0,50);
+  try{localStorage.setItem(arrangementKey,JSON.stringify(savedArrangements));}catch{}refreshArrangementLibrary();
+}
+function loadArrangement(data){
+  validArrangement(data);layout.cancelGestures();closeMenu();stop();const state=data.state;
+  tempo=state.tempo;$('#tempo').value=tempo;
+  pitches.splice(0,pitches.length,...state.pitches);pitchCache.fill(null);expandedArrangements.fill(null);
+  muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);trackColors=[...state.colors];trackView=state.view;
+  names.forEach((_,t)=>applyTrackColor(t));layout.restore(state.positions);renderViewToggle();
+  try{localStorage.setItem(colorKey,JSON.stringify(trackColors));localStorage.setItem(pitchKey,JSON.stringify(pitches));localStorage.setItem(viewKey,trackView);}catch{}
+  state.regions.forEach(r=>sweeps.add(r.direction==='down'?r.cross:r.start,r.direction==='down'?r.start:r.cross,r.direction==='down',true,false,r.end));
+  syncTrackPresence();editHistory.record();message.textContent=`Loaded ${data.name}`;
+}
+$('#save-arrangement').addEventListener('click',()=>{
+  const name=window.prompt('Name this arrangement','My arrangement');if(!name?.trim())return;
+  const data=captureArrangement(name.trim().slice(0,120));rememberArrangement(data);
+  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=data.name.replace(/[^a-z0-9 _-]/gi,'').trim()||'Music arrangement';link.download+='.json';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);message.textContent=`Saved ${data.name}`;
+});
+loadSelect.addEventListener('change',()=>{const value=loadSelect.value;loadSelect.value='';if(value==='file'){fileInput.click();return;}if(value!==''&&savedArrangements[Number(value)])loadArrangement(savedArrangements[Number(value)]);});
+fileInput.addEventListener('change',async()=>{
+  const file=fileInput.files?.[0];if(!file)return;try{if(file.size>1048576)throw new Error('Arrangement file is too large.');const data=validArrangement(JSON.parse(await file.text()));loadArrangement(data);rememberArrangement(data);}catch(error){message.textContent=error.message||'Could not load arrangement.';}finally{fileInput.value='';}
+});
+refreshArrangementLibrary();
+
 render();animate();
