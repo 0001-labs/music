@@ -6,7 +6,7 @@ const muted=Array(names.length).fill(false),solo=Array(names.length).fill(false)
 const baseTempo=112,totalBeats=32;
 const $=selector=>document.querySelector(selector);
 const playback=names.map(()=>({running:false,starting:false,beat:0,startedAt:0,epoch:0,source:null}));
-let tempo=112,ctx,master,analyser,gains=[],arrangements,loading;
+let tempo=112,ctx,master,analyser,gains=[],arrangements,loading,barOrigin=null;
 const play=$('#play'),message=$('#message');
 function waveform(peaks,vertical=false){
   const max=Math.max(...peaks,.001);
@@ -31,6 +31,7 @@ const layout=window.createMusicLayout(rows);
 function audible(t){return !muted[t]&&(!solo.some(Boolean)||solo[t]);}
 function updateGain(t){if(gains[t])gains[t].gain.setTargetAtTime(audible(t)?1:0,ctx.currentTime,.012);}
 function currentBeat(t){const state=playback[t];return state.running?(state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60)%totalBeats:state.beat;}
+function snapBeat(beat){return (Math.round(Math.max(0,beat)/4)*4)%totalBeats;}
 function hasPlayback(){return playback.some(state=>state.running||state.starting);}
 function render(){
   const active=hasPlayback();
@@ -79,11 +80,19 @@ async function startTracks(indices){
   message.textContent='Preparing the audio…';render();
   try{
     createAudio();await ctx.resume();await loadAudio();
-    const at=ctx.currentTime+.06;
-    pending.forEach(({t,token})=>{
+    const valid=pending.filter(({t,token})=>token===playback[t].epoch);
+    if(!valid.length)return;
+    const joining=new Set(valid.map(({t})=>t));
+    const otherActive=playback.some((state,t)=>!joining.has(t)&&(state.running||state.starting));
+    const earliest=ctx.currentTime+.06,barSeconds=240/tempo;
+    let at=earliest;
+    if(barOrigin===null||!otherActive)barOrigin=earliest;
+    else at=barOrigin+Math.max(0,Math.ceil((earliest-barOrigin)/barSeconds-1e-9))*barSeconds;
+    valid.forEach(({t,token})=>{
       const state=playback[t];if(token!==state.epoch)return;
       const source=ctx.createBufferSource();source.buffer=arrangements[t];source.loop=true;
       source.playbackRate.value=tempo/baseTempo;source.connect(gains[t]);
+      state.beat=snapBeat(state.beat);
       source.start(at,state.beat*60/baseTempo);
       state.source=source;state.startedAt=at;state.running=true;state.starting=false;
       source.onended=()=>source.disconnect();
@@ -103,7 +112,7 @@ function pauseTrack(t){
 function pause(){
   names.forEach((_,t)=>pauseTrack(t));message.textContent='';render();
 }
-function stop(){pause();playback.forEach(state=>state.beat=0);updatePlayhead();}
+function stop(){pause();barOrigin=null;playback.forEach(state=>state.beat=0);updatePlayhead();}
 function toggleTrack(t){
   if(playback[t].running||playback[t].starting){pauseTrack(t);if(!playback.some(state=>state.starting))message.textContent='';render();}
   else void startTracks([t]);
@@ -111,7 +120,7 @@ function toggleTrack(t){
 function toggleAll(){if(hasPlayback())pause();else void startTracks(names.map((_,t)=>t));}
 function seekTrack(t,beat){
   const resume=playback[t].running||playback[t].starting;pauseTrack(t);
-  playback[t].beat=Math.max(0,Math.min(totalBeats-.001,beat));render();if(resume)void startTracks([t]);
+  playback[t].beat=snapBeat(Math.min(totalBeats,beat));render();if(resume)void startTracks([t]);
 }
 document.querySelectorAll('[data-track-play]').forEach(button=>button.addEventListener('click',()=>toggleTrack(Number(button.dataset.trackPlay))));
 document.querySelectorAll('[data-clip]').forEach(button=>button.addEventListener('click',event=>{
@@ -133,9 +142,8 @@ function updatePlayhead(){
   playheads.forEach((head,t)=>{
     const beat=currentBeat(t),active=playback[t].running&&audible(t);
     head.style[head.classList.contains('vertical-playhead')?'top':'left']=Math.floor(beat/totalBeats*640)+'px';
-    head.hidden=!active;
-    const segment=Math.floor(beat/8);
-    cells[t].forEach((cell,c)=>cell.classList.toggle('active',active&&c===segment));
+    head.hidden=!active||ctx.currentTime<playback[t].startedAt;
+    cells[t].forEach(cell=>cell.classList.toggle('active',active));
   });
 }
 function animate(){layout.tick();updatePlayhead();requestAnimationFrame(animate);}
