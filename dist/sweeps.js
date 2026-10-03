@@ -10,16 +10,16 @@ window.createMusicSweeps=function(options){
     return head.vertical?{left:first,top:head.origin,right:last,bottom:head.end}:{left:head.origin,top:first,right:head.end,bottom:last};
   }
   function arrangeTabs(positions=options.positions()){
-    const remaining=heads.filter(head=>head.controls),bounds=new Map(remaining.map(head=>[head,regionBounds(head,positions)]));
-    const overlaps=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
-    while(remaining.length){
-      const group=[remaining.shift()];
-      for(let i=0;i<group.length;i++)for(let j=remaining.length-1;j>=0;j--)if(overlaps(bounds.get(group[i]),bounds.get(remaining[j])))group.push(remaining.splice(j,1)[0]);
-      group.sort((a,b)=>heads.indexOf(a)-heads.indexOf(b));
-      const left=Math.min(...group.map(head=>bounds.get(head).left)),right=Math.max(...group.map(head=>bounds.get(head).right)),top=Math.min(...group.map(head=>bounds.get(head).top));
-      const columns=Math.max(1,Math.floor((right-left)/80)),rows=Math.ceil(group.length/columns);
-      group.forEach((head,i)=>{const row=Math.floor(i/columns),count=Math.min(columns,group.length-row*columns);Object.assign(head.controls.style,{left:(right-count*80+i%columns*80)+'px',top:Math.max(20,top-rows*20)+row*20+'px'});});
-    }
+    const placed=[],overlaps=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
+    heads.filter(head=>head.controls).forEach(head=>{
+      const bounds=regionBounds(head,positions),columns=Math.max(1,Math.floor((bounds.right-bounds.left)/80)),rows=Math.max(1,Math.floor((bounds.bottom-bounds.top)/20));
+      let tab;
+      for(let i=0;i<columns*rows;i++){
+        const left=bounds.left+i%columns*80,top=bounds.top+Math.floor(i/columns)*20;
+        tab={left,top,right:left+80,bottom:top+20};if(!placed.some(other=>overlaps(tab,other)))break;
+      }
+      placed.push(tab);Object.assign(head.controls.style,{left:tab.left+'px',top:tab.top+'px'});
+    });
   }
   function timelineBeat(head){
     if(!head.running)return head.beat;
