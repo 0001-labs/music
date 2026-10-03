@@ -33,8 +33,12 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     if(migrated&&Array.isArray(saved)&&saved.length>0&&saved.length<rows.length)positions.slice(saved.length).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,saved.length+t).map(item=>item.y+item.height))/unit)*unit;});
   }catch{}
   let obstacles=()=>[];
-  let drag=null,marquee=null,suppressClick=null,layer=10;
+  let drag=null,marquee=null,range=null,rangeCut=null,suppressClick=null,suppressMarqueeClick=false,layer=10;
   const selected=new Set(),selectionBox=document.querySelector('#selection-marquee');
+  const cutControl=document.createElement('button');cutControl.className='marquee-cut';cutControl.textContent='✂';cutControl.title='Split selection (Command-E)';cutControl.setAttribute('aria-label',cutControl.title);cutControl.hidden=true;canvas.appendChild(cutControl);
+  cutControl.addEventListener('pointerdown',event=>event.stopPropagation());cutControl.addEventListener('click',event=>{event.stopPropagation();if(range)rangeCut?.({...range});});
+  function clearRange(){range=null;selectionBox.hidden=true;cutControl.hidden=true;}
+  function paintRange(){selectionBox.hidden=!range||range.width===0||range.height===0;cutControl.hidden=selectionBox.hidden||!positions.concat(obstacles()).some(p=>!p.deleted&&intersects(range,p));if(range){Object.assign(selectionBox.style,{left:range.x+'px',top:range.y+'px',width:range.width+'px',height:range.height+'px'});Object.assign(cutControl.style,{left:(range.x+range.width-20)+'px',top:range.y+'px'});}}
   function showSelection(){rows.forEach((row,t)=>row.classList.toggle('selected',selected.has(t)));}
   function selectOnly(t){selected.clear();selected.add(t);showSelection();}
   function save(){try{localStorage.setItem(key,JSON.stringify(positions));}catch{}onCommit?.();}
@@ -124,7 +128,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     row.setAttribute('role','group');
     row.setAttribute('aria-label',`${row.querySelector('.track-label').textContent}. Drag to move; Select and use arrow keys to move four grid squares. Delete removes selected tracks. The corner handle scales its display; the centered end handle trims its loop.`);
     row.addEventListener('pointerdown',event=>{
-      if(positions[t].deleted||event.button!==0||!event.isPrimary||event.target.closest('[data-track-play],[data-mute],[data-solo]'))return;
+      if(event.altKey)return;clearRange();if(positions[t].deleted||event.button!==0||!event.isPrimary||event.target.closest('[data-track-play],[data-mute],[data-solo]'))return;
       suppressClick=null;document.activeElement?.blur();
       if(event.shiftKey){if(selected.has(t))selected.delete(t);else selected.add(t);showSelection();suppressClick=t;if(!selected.has(t))return;}
       else if(!selected.has(t))selectOnly(t);
@@ -148,29 +152,29 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     });
   });
   function updateMarquee(){
-    const x=marquee.clientX+window.scrollX,y=marquee.clientY+window.scrollY;
+    const x=snapPosition(marquee.clientX+window.scrollX),y=snap(marquee.clientY+window.scrollY);
     const area={x:Math.min(x,marquee.startX),y:Math.min(y,marquee.startY),width:Math.abs(x-marquee.startX),height:Math.abs(y-marquee.startY)};
-    Object.assign(selectionBox.style,{left:area.x+'px',top:area.y+'px',width:area.width+'px',height:area.height+'px'});
+    range=area;paintRange();
     selected.clear();if(marquee.additive)marquee.before.forEach(t=>selected.add(t));
     positions.forEach((p,t)=>{if(!p.deleted&&intersects(area,p))selected.add(t);});showSelection();
   }
   function finishMarquee(cancel=false){
     if(!marquee)return;
-    const state=marquee;marquee=null;selectionBox.hidden=true;
-    if(cancel){selected.clear();state.before.forEach(t=>selected.add(t));showSelection();}
+    const state=marquee;marquee=null;if(state.active&&!cancel)suppressMarqueeClick=true;if(!state.active)clearRange();else paintRange();
+    if(cancel){range=state.beforeRange;paintRange();selected.clear();state.before.forEach(t=>selected.add(t));showSelection();}
     if(canvas.hasPointerCapture(state.id))canvas.releasePointerCapture(state.id);
   }
   document.addEventListener('pointerdown',event=>{
-    if(event.button!==0||!event.isPrimary||event.target.closest('.track-surface,.transport,.context-menu,.canvas-playhead,.canvas-playhead-track,.arrangement-block,.arrangement-block-menu,input,textarea,select,[contenteditable="true"]'))return;
+    if(event.button!==0||!event.isPrimary||event.target.closest('.transport,.context-menu,.canvas-playhead,.marquee-cut,input,textarea,select,[contenteditable="true"]')||(!event.altKey&&event.target.closest('.track-surface,.arrangement-block,.arrangement-block-menu')))return;
     finish(true);
-    marquee={id:event.pointerId,startX:event.clientX+window.scrollX,startY:event.clientY+window.scrollY,clientX:event.clientX,clientY:event.clientY,before:new Set(selected),additive:event.shiftKey||event.metaKey||event.ctrlKey,active:false};
+    marquee={id:event.pointerId,rawX:event.clientX+window.scrollX,rawY:event.clientY+window.scrollY,startX:snapPosition(event.clientX+window.scrollX),startY:snap(event.clientY+window.scrollY),clientX:event.clientX,clientY:event.clientY,beforeRange:range?{...range}:null,before:new Set(selected),additive:event.shiftKey||event.metaKey||event.ctrlKey,active:false};
     if(!marquee.additive){selected.clear();showSelection();}
     document.activeElement?.blur();
   });
   document.addEventListener('pointermove',event=>{
     if(marquee&&event.pointerId===marquee.id){
       marquee.clientX=event.clientX;marquee.clientY=event.clientY;
-      if(!marquee.active&&Math.hypot(event.clientX+window.scrollX-marquee.startX,event.clientY+window.scrollY-marquee.startY)>=3){marquee.active=true;canvas.setPointerCapture(marquee.id);selectionBox.hidden=false;}
+      if(!marquee.active&&Math.hypot(event.clientX+window.scrollX-marquee.rawX,event.clientY+window.scrollY-marquee.rawY)>=3){marquee.active=true;canvas.setPointerCapture(marquee.id);selectionBox.hidden=false;}
       if(marquee.active){event.preventDefault();updateMarquee();}return;
     }
     if(!drag||event.pointerId!==drag.id)return;
@@ -183,6 +187,8 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     }
     if(drag.active){event.preventDefault();move();}
   },{passive:false});
+  document.addEventListener('pointerdown',()=>{suppressMarqueeClick=false;},true);
+  document.addEventListener('click',event=>{if(suppressMarqueeClick){suppressMarqueeClick=false;event.preventDefault();event.stopImmediatePropagation();}},true);
   document.addEventListener('pointerup',event=>{if(marquee&&event.pointerId===marquee.id)finishMarquee();if(drag&&event.pointerId===drag.id)finish();});
   document.addEventListener('pointercancel',event=>{if(marquee&&event.pointerId===marquee.id)finishMarquee(true);if(drag&&event.pointerId===drag.id)finish(true);});
   document.addEventListener('keydown',event=>{
@@ -190,11 +196,11 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     if(event.key==='Escape'){
       if(marquee){event.preventDefault();finishMarquee(true);}
       else if(drag){event.preventDefault();finish(true);}
-      else{selected.clear();showSelection();}return;
+      else{clearRange();selected.clear();showSelection();}return;
     }
     if(event.target?.closest?.('[data-resize],[data-trim]'))return;
     const steps={ArrowLeft:[-placementStep,0],ArrowRight:[placementStep,0],ArrowUp:[0,-unit],ArrowDown:[0,unit]};
-    if(selected.size&&steps[event.key]){event.preventDefault();moveSelected(...steps[event.key]);}
+    if(selected.size&&steps[event.key]){event.preventDefault();clearRange();moveSelected(...steps[event.key]);}
   });
   window.addEventListener('resize',resizeCanvas);
   window.addEventListener('blur',()=>{finish(true);finishMarquee(true);});
@@ -219,9 +225,9 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     showSelection();paintAll();save();
   }
   function restore(next){
-    finish(true);finishMarquee(true);positions=next.map(p=>({...p}));
+    finish(true);finishMarquee(true);clearRange();positions=next.map(p=>({...p}));
     selected.clear();showSelection();paintAll();save();
   }
   function cancelGestures(){finish(true);finishMarquee(true);}
-  return {setObstacles(callback){obstacles=callback;paintAll();},tick,toggleOrientation,deleteTracks,restore,reset:()=>restore(defaultPositions),cancelGestures,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
+  return {getRange:()=>range?{...range}:null,clearRange,setRangeHandler(callback){rangeCut=callback;},setObstacles(callback){obstacles=callback;paintAll();},tick,toggleOrientation,deleteTracks,restore,reset:()=>restore(defaultPositions),cancelGestures,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
 };
