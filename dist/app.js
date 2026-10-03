@@ -39,6 +39,15 @@ function waveform(peaks,vertical=false,width=160,height=16,startPixel=0,displayP
   }).join('');
   return `<svg class="waveform" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="width:${width}px;height:${height}px" shape-rendering="crispEdges" aria-hidden="true">${bars}</svg>`;
 }
+function loopMarkers({width,height,vertical,beats}){
+  const length=vertical?height:width,boundaries=[];
+  for(let beat=totalBeats;beat<beats;beat+=totalBeats)boundaries.push(beat);
+  boundaries.push(beats);
+  return boundaries.map(beat=>{
+    const end=beat===beats,pixel=Math.min(length-1,Math.round(beat/beats*length));
+    return `<span class="loop-boundary${end?' loop-end':''}" data-loop-beat="${beat}" style="${vertical?'top':'left'}:${pixel}px" title="${end?'Track loop end':'Audio pattern repeats'}"></span>`;
+  }).join('');
+}
 function trackChip(name,t){
   return `<div class="track-info"><div class="track-name"><button class="track-play" data-track-play="${t}" aria-label="Play ${name}" aria-pressed="false" title="Play ${name}">▶</button><span class="track-label">${name}</span></div></div>`;
 }
@@ -55,6 +64,9 @@ $('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-t
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
+const loopBoundaries=rows.map(row=>{
+  const layer=document.createElement('div');layer.className='loop-boundaries';layer.setAttribute('aria-hidden','true');row.appendChild(layer);return layer;
+});
 const layout=window.createMusicLayout(rows,(t,vertical)=>{
   cells[t].forEach(cell=>cell.classList.toggle('vertical-clip',vertical));
   playheads[t].classList.toggle('vertical-playhead',vertical);
@@ -89,6 +101,7 @@ function updateWaveforms(sizes){
       const clip=clips[t][Math.floor(c*part/(8*displayPixelsPerBeat))%4];
       cell.title=clip.name;cell.setAttribute('aria-label',`${names[t]}: ${clip.name}. Click to move playhead.`);
     });
+    loopBoundaries[t].innerHTML=loopMarkers({width,height,vertical,beats});
     resizeLoop(t,beats);
   });
 }
