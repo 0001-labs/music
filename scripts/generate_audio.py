@@ -6,6 +6,7 @@ SR = 22050
 BPM = 112
 BEAT = 60 / BPM
 N = round(SR * BEAT * 8)
+PEAK_COUNT = 512
 random.seed(17)
 
 def add(buf, onset, dur, fn, gain=1):
@@ -81,8 +82,8 @@ for track in range(len(names)):
             w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
             w.writeframes(struct.pack('<'+'h'*N,*[round(x*32767) for x in samples]))
         peaks=[]
-        for p in range(64):
-            chunk=samples[p*N//64:(p+1)*N//64]
+        for p in range(PEAK_COUNT):
+            chunk=samples[p*N//PEAK_COUNT:(p+1)*N//PEAK_COUNT]
             peaks.append(round(max(abs(x) for x in chunk),4))
         row.append({'name':names[track][variant],'file':filename,'peaks':peaks})
     clips.append(row)

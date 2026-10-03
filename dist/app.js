@@ -23,13 +23,17 @@ const $=selector=>document.querySelector(selector);
 const playback=names.map(()=>({running:false,starting:false,beat:0,startedAt:0,epoch:0,source:null}));
 let tempo=112,ctx,master,analyser,gains=[],arrangements,loading,barOrigin=null;
 const play=$('#play'),message=$('#message');
-function waveform(peaks,vertical=false){
-  const max=Math.max(...peaks,.001);
-  const bars=peaks.map((p,i)=>{
-    const amplitude=Math.max(1,p/max*36);
-    return vertical?`<rect x="${(40-amplitude)/2}" y="${i*2}" width="${amplitude}" height="1" fill="currentColor"/>`:`<rect x="${i*2}" y="${(40-amplitude)/2}" width="1" height="${amplitude}" fill="currentColor"/>`;
+function waveform(peaks,vertical=false,width=153,height=15){
+  const length=vertical?height:width,cross=vertical?width:height;
+  const count=Math.max(1,Math.floor(length/2)),max=Math.max(...peaks,.001);
+  // Pool measured peaks into fixed two-pixel steps so short lanes retain transients.
+  const bars=Array.from({length:count},(_,i)=>{
+    const start=Math.floor(i*peaks.length/count),end=Math.max(start+1,Math.ceil((i+1)*peaks.length/count));
+    let peak=0;for(let p=start;p<end;p++)peak=Math.max(peak,peaks[p]);
+    const amplitude=Math.max(1,Math.round(peak/max*cross*.9)),offset=Math.round((cross-amplitude)/2);
+    return vertical?`<rect x="${offset}" y="${i*2}" width="${amplitude}" height="1" fill="currentColor"/>`:`<rect x="${i*2}" y="${offset}" width="1" height="${amplitude}" fill="currentColor"/>`;
   }).join('');
-  return `<svg class="waveform" viewBox="${vertical?'0 0 40 128':'0 0 128 40'}" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>`;
+  return `<svg class="waveform" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="width:${width}px;height:${height}px" shape-rendering="crispEdges" aria-hidden="true">${bars}</svg>`;
 }
 function trackChip(name,t){
   return `<div class="track-info"><div class="track-name"><button class="track-play" data-track-play="${t}" aria-label="Play ${name}" aria-pressed="false" title="Play ${name}">▶</button><span class="track-label">${name}</span></div></div>`;
@@ -47,10 +51,20 @@ const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
 const layout=window.createMusicLayout(rows,(t,vertical)=>{
-  cells[t].forEach((cell,c)=>{cell.classList.toggle('vertical-clip',vertical);cell.innerHTML=waveform(clips[t][c].peaks,vertical);});
+  cells[t].forEach(cell=>cell.classList.toggle('vertical-clip',vertical));
   playheads[t].classList.toggle('vertical-playhead',vertical);
   playheads[t].style.left='0px';playheads[t].style.top='0px';
 });
+const waveformSizes=Array(names.length).fill('');
+function updateWaveforms(sizes){
+  sizes.forEach(({width,height,vertical},t)=>{
+    const key=`${width},${height},${vertical}`;if(waveformSizes[t]===key)return;
+    waveformSizes[t]=key;
+    // Clip borders and insets are excluded; SVG units now match physical pixels.
+    const clipWidth=width/(vertical?1:4)-7,clipHeight=height/(vertical?4:1)-(vertical?7:5);
+    cells[t].forEach((cell,c)=>cell.innerHTML=waveform(clips[t][c].peaks,vertical,clipWidth,clipHeight));
+  });
+}
 function tint(hex,amount){return '#'+[1,3,5].map(index=>Math.round(255*(1-amount)+parseInt(hex.slice(index,index+2),16)*amount).toString(16).padStart(2,'0')).join('');}
 function applyTrackColor(t){
   const color=palette.find(color=>color.id===trackColors[t]);if(!color)return;
@@ -208,7 +222,7 @@ $('#tempo').addEventListener('change',event=>{
 });
 document.addEventListener('keydown',event=>{if(event.code==='Space'&&!/INPUT|BUTTON|TEXTAREA|SELECT/.test(event.target.tagName)){event.preventDefault();toggleAll();}});
 function updatePlayhead(){
-  const sizes=layout.getPositions();
+  const sizes=layout.getPositions();updateWaveforms(sizes);
   playheads.forEach((head,t)=>{
     const beat=currentBeat(t),active=playback[t].running&&audible(t);
     const vertical=head.classList.contains('vertical-playhead'),length=vertical?sizes[t].height:sizes[t].width;
