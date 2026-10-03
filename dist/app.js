@@ -79,7 +79,6 @@ $('#tempo').addEventListener('change',event=>{const value=Number(event.target.va
 document.addEventListener('keydown',event=>{if(event.code==='Space'&&!/INPUT|BUTTON|TEXTAREA|SELECT/.test(event.target.tagName)){event.preventDefault();if(!starting)running?pause():void start();}});
 function updatePlayhead(){
   const beat=currentBeat();
-  $('#position').textContent=`${Math.floor(beat/4)+1}.${Math.floor(beat%4)+1}.${Math.floor((beat%1)*4)+1}`;
   $('#playhead').style.left=(80+beat/totalBeats*640)+'px';$('#playhead').classList.toggle('playing',running);
   const segment=Math.floor(beat/8);
   cells.forEach((row,t)=>row.forEach((cell,c)=>cell.classList.toggle('active',running&&audible(t)&&c===segment)));
