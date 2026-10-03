@@ -21,7 +21,6 @@ function audible(t){return !muted[t]&&(!solo.some(Boolean)||solo[t]);}
 function updateGain(t){if(gains[t])gains[t].gain.setTargetAtTime(audible(t)?1:0,ctx.currentTime,.012);}
 function currentBeat(){return running?Math.max(0,(ctx.currentTime-origin)*tempo/60)%totalBeats:pausedBeat;}
 function render(){
-  $('#play-label').textContent=starting?'Loading':running?'Pause':'Play';
   play.querySelector('.play-icon').textContent=running?'Ⅱ':'▶';
   play.setAttribute('aria-label',running?'Pause arrangement':'Play arrangement');
   play.disabled=starting;
