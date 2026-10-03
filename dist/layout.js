@@ -11,6 +11,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
   let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),deleted:false,beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
+  const defaultPositions=positions.map(p=>({...p}));
   let migrated=false;
   try{
     const saved=JSON.parse(localStorage.getItem(key));
@@ -215,5 +216,5 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
     selected.clear();showSelection();paintAll();save();
   }
   function cancelGestures(){finish(true);finishMarquee(true);}
-  return {tick,toggleOrientation,deleteTracks,restore,cancelGestures,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
+  return {tick,toggleOrientation,deleteTracks,restore,reset:()=>restore(defaultPositions),cancelGestures,getSelection:()=>Array.from(selected),getPositions:()=>positions.map(p=>({...p}))};
 };

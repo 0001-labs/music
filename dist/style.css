@@ -43,3 +43,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 #piano-track{display:contents}.notation{color:#1e1e1e}.active .notation{color:var(--track-active-ink,#295a1c)}
 
 .track-surface[hidden]{display:none}.history-button{width:20px;height:20px;line-height:20px;padding:0;background:#eee;font-size:16px}.history-button:hover:not(:disabled){background:#ddd}.history-button:disabled{color:#aaa;cursor:default}.context-menu{height:auto}
+
+.reset-button{height:20px;width:40px;padding:0;line-height:20px;background:#eee;font-size:12px}.reset-button:hover{background:#ddd}

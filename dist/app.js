@@ -437,10 +437,13 @@ document.querySelectorAll('[data-clip]').forEach(button=>button.addEventListener
 document.querySelectorAll('[data-mute]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.mute);muted[t]=!muted[t];updateGain(t);render();editHistory.record();}));
 document.querySelectorAll('[data-solo]').forEach(button=>button.addEventListener('click',()=>{const t=Number(button.dataset.solo);solo[t]=!solo[t];names.forEach((_,i)=>updateGain(i));render();editHistory.record();}));
 play.addEventListener('click',toggleAll);$('#stop').addEventListener('click',stop);
+function changeTempo(value){
+  const active=names.map((_,t)=>t).filter(t=>playback[t].running||playback[t].starting);
+  active.forEach(pauseTrack);sweeps.setTempo();tempo=value;$('#tempo').value=value;sweeps.reschedule();if(active.length)void startTracks(active);
+}
 $('#tempo').addEventListener('change',event=>{
   const value=Number(event.target.value);if(!Number.isFinite(value)||value<70||value>160){event.target.value=tempo;return;}
-  const active=names.map((_,t)=>t).filter(t=>playback[t].running||playback[t].starting);
-  active.forEach(pauseTrack);sweeps.setTempo();tempo=value;sweeps.reschedule();if(active.length)void startTracks(active);
+  changeTempo(value);editHistory.record();
 });
 document.addEventListener('keydown',event=>{if(event.code==='Space'&&!/INPUT|BUTTON|TEXTAREA|SELECT/.test(event.target.tagName)){event.preventDefault();toggleAll();}});
 function updatePlayhead(){
@@ -470,8 +473,9 @@ function syncTrackPresence(){
 }
 const undoButton=$('#undo'),redoButton=$('#redo');
 editHistory=window.createMusicHistory({
-  read:()=>({positions:layout.getPositions(),colors:[...trackColors],muted:[...muted],solo:[...solo]}),
+  read:()=>({tempo,positions:layout.getPositions(),colors:[...trackColors],muted:[...muted],solo:[...solo]}),
   apply(state){
+    if(state.tempo!==tempo)changeTempo(state.tempo);
     trackColors=[...state.colors];muted.splice(0,muted.length,...state.muted);solo.splice(0,solo.length,...state.solo);
     layout.restore(state.positions);names.forEach((_,t)=>applyTrackColor(t));
     try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
@@ -479,6 +483,14 @@ editHistory=window.createMusicHistory({
   },
   changed(state){undoButton.disabled=!state.undo;redoButton.disabled=!state.redo;}
 });
+function resetArrangement(){
+  layout.cancelGestures();closeMenu();stop();
+  tempo=baseTempo;$('#tempo').value=tempo;muted.fill(false);solo.fill(false);trackColors=names.map(()=>null);
+  names.forEach((_,t)=>applyTrackColor(t));
+  try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
+  layout.reset();syncTrackPresence();updatePlayhead();editHistory.record();
+}
+$('#reset').addEventListener('click',resetArrangement);
 function undoEdits(){layout.cancelGestures();closeMenu();editHistory.undo();}
 function redoEdits(){layout.cancelGestures();closeMenu();editHistory.redo();}
 function deleteSelectedTracks(target=null){
