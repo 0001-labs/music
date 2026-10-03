@@ -41,7 +41,7 @@ function waveform(peaks,vertical=false,width=160,height=16,startPixel=0,displayP
 }
 function loopMarkers({width,height,vertical,beats}){
   const length=vertical?height:width,boundaries=[];
-  for(let beat=totalBeats;beat<beats;beat+=totalBeats)boundaries.push(beat);
+  for(let beat=16;beat<beats;beat+=16)boundaries.push(beat);
   boundaries.push(beats);
   return boundaries.map(beat=>{
     const end=beat===beats,pixel=Math.min(length-1,Math.round(beat/beats*length));

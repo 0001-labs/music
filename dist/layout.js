@@ -10,7 +10,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
   const minimumSize=vertical=>vertical?{width:80,height:160}:{width:160,height:20};
   const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
   const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
-  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track'),deleted:false,beats:(row.classList.contains('vertical-track')?row.offsetHeight:row.offsetWidth)/40}));
+  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*placementStep,width:row.classList.contains('vertical-track')?80:640,height:row.classList.contains('vertical-track')?640:row.offsetHeight,vertical:row.classList.contains('vertical-track'),deleted:false,beats:16}));
   const defaultPositions=positions.map(p=>({...p}));
   let migrated=false;
   try{
@@ -20,10 +20,15 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
       const vertical=typeof p.vertical==='boolean'?p.vertical:positions[t].vertical;
       const hasBeats=Number.isFinite(p.beats)&&p.beats>=2&&p.beats<=2500;
       const dimension=(axis,value)=>Number.isFinite(value)&&value<=100000?(hasBeats?Math.max(minimumSize(vertical)[axis],snap(value)):sizeSnap(t,axis,value,vertical)):positions[t][axis];
-      const width=dimension('width',p.width),height=dimension('height',p.height);
+      let width=dimension('width',p.width),height=dimension('height',p.height);
+      const oldBeats=hasBeats?p.beats:(vertical?height:width)/40,beats=Math.max(16,Math.round(oldBeats/16)*16);
+      if(beats!==oldBeats){
+        const length=Math.max(minimumSize(vertical)[vertical?'height':'width'],Math.round((vertical?height:width)*beats/oldBeats/placementStep)*placementStep);
+        if(vertical)height=length;else width=length;migrated=true;
+      }
       const x=snapPosition(p.x),y=snapPosition(p.y);
       if(x!==p.x||y!==p.y)migrated=true;
-      return {x,y,vertical,width,height,deleted:p.deleted===true,beats:hasBeats?p.beats:(vertical?height:width)/40};
+      return {x,y,vertical,width,height,deleted:p.deleted===true,beats};
     });
     if(migrated&&Array.isArray(saved)&&saved.length>0&&saved.length<rows.length)positions.slice(saved.length).forEach((p,t)=>{p.y=Math.ceil(Math.max(...positions.slice(0,saved.length+t).map(item=>item.y+item.height))/placementStep)*placementStep;});
   }catch{}
@@ -71,8 +76,8 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
   }
   function trimTrack(t,delta,baseline=positions[t]){
     const length=baseline.vertical?baseline.height:baseline.width,pixelsPerBeat=length/baseline.beats;
-    const minimumBeats=Math.max(2,Math.ceil(minimumSize(baseline.vertical)[baseline.vertical?'height':'width']/pixelsPerBeat/2)*2);
-    const beats=Math.max(minimumBeats,Math.round((baseline.beats+delta/pixelsPerBeat)/2)*2);
+    const minimumBeats=Math.max(16,Math.ceil(minimumSize(baseline.vertical)[baseline.vertical?'height':'width']/pixelsPerBeat/16)*16);
+    const beats=Math.max(minimumBeats,Math.round((baseline.beats+delta/pixelsPerBeat)/16)*16);
     const nextLength=snap(beats*pixelsPerBeat);
     return place(t,baseline.x,baseline.y,baseline.vertical?baseline.width:nextLength,baseline.vertical?nextLength:baseline.height,baseline.vertical,beats,true);
   }
@@ -133,7 +138,7 @@ window.createMusicLayout=function(rows,onOrientationChange,onCommit){
       if((event.altKey||resize||trim)&&steps[event.key]){
         event.preventDefault();event.stopPropagation();const [x,y]=steps[event.key];
         finish(true);row.style.zIndex=++layer;
-        if(trim){const p=positions[t],delta=p.vertical?y:x;if(delta)trimTrack(t,Math.sign(delta)*2*(p.vertical?p.height:p.width)/p.beats);}
+        if(trim){const p=positions[t],delta=p.vertical?y:x;if(delta)trimTrack(t,Math.sign(delta)*16*(p.vertical?p.height:p.width)/p.beats);}
         else if(resize)place(t,positions[t].x,positions[t].y,positions[t].width+Math.sign(x)*sizeStep(t,'width'),positions[t].height+Math.sign(y)*sizeStep(t,'height'));
         else{if(!selected.has(t))selectOnly(t);moveSelected(x,y);}
         save();
