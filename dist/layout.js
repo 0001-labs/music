@@ -1,17 +1,20 @@
 'use strict';
-window.createMusicLayout=function(rows){
+window.createMusicLayout=function(rows,onOrientationChange){
   const unit=20,key='music-grid-layout-v1',canvas=document.querySelector('#canvas');
   const snap=value=>Math.max(0,Math.round(value/unit)*unit);
   const viewport=document.documentElement;
   const initialX=Math.max(unit,snap((viewport.clientWidth-640)/2));
   const initialY=viewport.clientWidth<=560?40:80;
-  const minimum=rows.map(row=>row.classList.contains('vertical-track')?{width:80,height:160}:{width:160,height:20});
-  const sizeStep=(t,axis)=>(rows[t].classList.contains('vertical-track')?axis==='height':axis==='width')?4*unit:unit;
-  const sizeSnap=(t,axis,value)=>Math.max(minimum[t][axis],Math.round(value/sizeStep(t,axis))*sizeStep(t,axis));
-  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*unit,width:row.offsetWidth,height:row.offsetHeight}));
+  const minimumSize=vertical=>vertical?{width:80,height:160}:{width:160,height:20};
+  const sizeStep=(t,axis,vertical=positions[t].vertical)=>(vertical?axis==='height':axis==='width')?4*unit:unit;
+  const sizeSnap=(t,axis,value,vertical=positions[t].vertical)=>Math.max(minimumSize(vertical)[axis],Math.round(value/sizeStep(t,axis,vertical))*sizeStep(t,axis,vertical));
+  let positions=rows.map((row,t)=>({x:initialX,y:initialY+t*unit,width:row.offsetWidth,height:row.offsetHeight,vertical:row.classList.contains('vertical-track')}));
   try{
     const saved=JSON.parse(localStorage.getItem(key));
-    if(Array.isArray(saved)&&saved.length===rows.length&&saved.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.y>=0&&p.x<=100000&&p.y<=100000))positions=saved.map((p,t)=>({x:snap(p.x),y:snap(p.y),width:Number.isFinite(p.width)&&p.width<=100000?sizeSnap(t,'width',p.width):positions[t].width,height:Number.isFinite(p.height)&&p.height<=100000?sizeSnap(t,'height',p.height):positions[t].height}));
+    if(Array.isArray(saved)&&saved.length===rows.length&&saved.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.y>=0&&p.x<=100000&&p.y<=100000))positions=saved.map((p,t)=>{
+      const vertical=typeof p.vertical==='boolean'?p.vertical:positions[t].vertical;
+      return {x:snap(p.x),y:snap(p.y),vertical,width:Number.isFinite(p.width)&&p.width<=100000?sizeSnap(t,'width',p.width,vertical):positions[t].width,height:Number.isFinite(p.height)&&p.height<=100000?sizeSnap(t,'height',p.height,vertical):positions[t].height};
+    });
   }catch{}
   let drag=null,suppressClick=null,layer=10;
   function save(){try{localStorage.setItem(key,JSON.stringify(positions));}catch{}}
@@ -24,27 +27,31 @@ window.createMusicLayout=function(rows){
   function overlaps(t,next,limit=positions.length){
     return positions.some((p,i)=>i!==t&&i<limit&&next.x<p.x+p.width&&next.x+next.width>p.x&&next.y<p.y+p.height&&next.y+next.height>p.y);
   }
-  function nearestFree(t,position){
+  function nearestFree(t,position,limit=positions.length){
     const xs=new Set([position.x,0]),ys=new Set([position.y,0]);
-    positions.slice(0,t).forEach(p=>{
+    positions.forEach((p,i)=>{
+      if(i===t||i>=limit)return;
       xs.add(snap(p.x-position.width));xs.add(p.x+p.width);
       ys.add(snap(p.y-position.height));ys.add(p.y+p.height);
     });
     const candidates=Array.from(xs).flatMap(x=>Array.from(ys,y=>({...position,x,y})));
     candidates.sort((a,b)=>(a.x-position.x)**2+(a.y-position.y)**2-((b.x-position.x)**2+(b.y-position.y)**2)||a.y-b.y||a.x-b.x);
-    return candidates.find(p=>!overlaps(t,p,t));
+    return candidates.find(p=>!overlaps(t,p,limit));
   }
   let repaired=false;
-  positions.forEach((p,t)=>{if(overlaps(t,p,t)){positions[t]=nearestFree(t,p);repaired=true;}});
+  positions.forEach((p,t)=>{if(overlaps(t,p,t)){positions[t]=nearestFree(t,p,t);repaired=true;}});
   if(repaired)save();
-  function place(t,x,y,width=positions[t].width,height=positions[t].height){
-    const next={x:snap(x),y:snap(y),width:sizeSnap(t,'width',width),height:sizeSnap(t,'height',height)};
+  function place(t,x,y,width=positions[t].width,height=positions[t].height,vertical=positions[t].vertical){
+    const next={x:snap(x),y:snap(y),vertical,width:sizeSnap(t,'width',width,vertical),height:sizeSnap(t,'height',height,vertical)};
     if(overlaps(t,next))return false;
+    const changed=rows[t].classList.contains('vertical-track')!==vertical;
     positions[t]=next;
+    rows[t].classList.toggle('vertical-track',vertical);rows[t].classList.toggle('track-row',!vertical);
+    if(changed)onOrientationChange?.(t,vertical);
     Object.assign(rows[t].style,{left:next.x+'px',top:next.y+'px',width:next.width+'px',height:next.height+'px'});
     resizeCanvas();return true;
   }
-  positions.forEach((p,t)=>place(t,p.x,p.y,p.width,p.height));
+  positions.forEach((p,t)=>place(t,p.x,p.y,p.width,p.height,p.vertical));
   function move(){
     if(!drag?.active)return;
     const dx=drag.clientX+window.scrollX-drag.startX,dy=drag.clientY+window.scrollY-drag.startY;
@@ -107,5 +114,12 @@ window.createMusicLayout=function(rows){
     const dy=drag.clientY<edge?-speed:drag.clientY>window.innerHeight-edge?speed:0;
     if(dx||dy){window.scrollBy(dx,dy);move();}
   }
-  return {tick,getPositions:()=>positions.map(p=>({...p}))};
+  function toggleOrientation(t){
+    finish(true);
+    const old=positions[t],vertical=!old.vertical;
+    let next={...old,vertical,width:sizeSnap(t,'width',old.height,vertical),height:sizeSnap(t,'height',old.width,vertical)};
+    if(overlaps(t,next))next=nearestFree(t,next);
+    rows[t].style.zIndex=++layer;place(t,next.x,next.y,next.width,next.height,vertical);save();
+  }
+  return {tick,toggleOrientation,getPositions:()=>positions.map(p=>({...p}))};
 };

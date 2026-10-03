@@ -28,7 +28,34 @@ $('#vertical-track').innerHTML=`<div class="vertical-track track-surface" data-t
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
-const layout=window.createMusicLayout(rows);
+const layout=window.createMusicLayout(rows,(t,vertical)=>{
+  cells[t].forEach((cell,c)=>{cell.classList.toggle('vertical-clip',vertical);cell.innerHTML=waveform(clips[t][c].peaks,vertical);});
+  playheads[t].classList.toggle('vertical-playhead',vertical);
+  playheads[t].style.left='0px';playheads[t].style.top='0px';
+});
+const menu=$('#track-menu'),orientationButton=$('#orientation');
+let menuTrack=null;
+function closeMenu(restoreFocus=false){
+  const t=menuTrack;menu.hidden=true;menuTrack=null;
+  if(restoreFocus&&t!==null)rows[t].querySelector('[data-track-play]').focus();
+}
+function openMenu(t,clientX,clientY){
+  menuTrack=t;orientationButton.textContent=layout.getPositions()[t].vertical?'Make horizontal':'Make vertical';
+  const left=Math.max(0,Math.min(window.innerWidth-120,clientX)),top=Math.max(0,Math.min(window.innerHeight-20,clientY));
+  menu.style.left=Math.floor((left+window.scrollX)/20)*20+'px';menu.style.top=Math.floor((top+window.scrollY)/20)*20+'px';
+  menu.hidden=false;orientationButton.focus();
+}
+rows.forEach((row,t)=>{
+  row.addEventListener('contextmenu',event=>{
+    event.preventDefault();event.stopPropagation();
+    const rect=row.getBoundingClientRect();openMenu(t,event.clientX||rect.left,event.clientY||rect.bottom);
+  });
+  row.addEventListener('keydown',event=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){event.preventDefault();const rect=row.getBoundingClientRect();openMenu(t,rect.left,rect.bottom);}});
+});
+orientationButton.addEventListener('click',()=>{if(menuTrack!==null){layout.toggleOrientation(menuTrack);updatePlayhead();closeMenu(true);}});
+document.addEventListener('pointerdown',event=>{if(menuTrack!==null&&!menu.contains(event.target))closeMenu();});
+document.addEventListener('keydown',event=>{if(menuTrack!==null&&(event.key==='Escape'||event.key==='Tab')){if(event.key==='Escape')event.preventDefault();closeMenu(true);}});
+window.addEventListener('scroll',()=>closeMenu(),{passive:true});window.addEventListener('resize',()=>closeMenu());
 function audible(t){return !muted[t]&&(!solo.some(Boolean)||solo[t]);}
 function updateGain(t){if(gains[t])gains[t].gain.setTargetAtTime(audible(t)?1:0,ctx.currentTime,.012);}
 function currentBeat(t){const state=playback[t];return state.running?(state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60)%totalBeats:state.beat;}
