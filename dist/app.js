@@ -35,6 +35,7 @@ function render(){
   play.disabled=starting;
   rows.forEach((row,t)=>{
     row.classList.toggle('silent',!audible(t));
+    row.classList.toggle('has-track-state',muted[t]||solo[t]);
     const mute=row.querySelector('[data-mute]'),s=row.querySelector('[data-solo]');
     mute.classList.toggle('muted',muted[t]);mute.setAttribute('aria-pressed',muted[t]);
     s.classList.toggle('soloed',solo[t]);s.setAttribute('aria-pressed',solo[t]);
