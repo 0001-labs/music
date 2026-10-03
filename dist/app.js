@@ -67,14 +67,17 @@ const playheads=rows.map(row=>row.querySelector('.playhead'));
 const loopBoundaries=rows.map(row=>{
   const layer=document.createElement('div');layer.className='loop-boundaries';layer.setAttribute('aria-hidden','true');row.appendChild(layer);return layer;
 });
+const sweepTrackHeads=rows.map(row=>{
+  const layer=document.createElement('div');layer.className='sweep-track-heads';layer.setAttribute('aria-hidden','true');row.appendChild(layer);return layer;
+});
 const layout=window.createMusicLayout(rows,(t,vertical)=>{
   cells[t].forEach(cell=>cell.classList.toggle('vertical-clip',vertical));
   playheads[t].classList.toggle('vertical-playhead',vertical);
   playheads[t].style.left='0px';playheads[t].style.top='0px';
 });
 const sweeps=window.createMusicSweeps({
-  canvas:$('#canvas'),positions:()=>layout.getPositions(),baseTempo,totalBeats,
-  audio:()=>({ctx,tempo,pixelsPerBeat,arrangements,gains}),
+  canvas:$('#canvas'),positions:()=>layout.getPositions(),baseTempo,totalBeats,audible,
+  audio:()=>({ctx,tempo,pixelsPerBeat,arrangements,gains,master}),
   async prepare(){message.textContent='Preparing the audio…';createAudio();await ctx.resume();await loadAudio();},
   startTime(){
     const earliest=ctx.currentTime+.06,barSeconds=240/tempo;
@@ -84,7 +87,7 @@ const sweeps=window.createMusicSweeps({
   changed:()=>render(),clearMessage:()=>message.textContent='',error:error=>message.textContent=error.message||'Audio could not start. Please try again.'
 });
 document.addEventListener('dblclick',event=>{
-  if(event.button!==0||event.target.closest('.track-surface,.transport,.context-menu,.canvas-playhead,input,textarea,select,[contenteditable="true"]'))return;
+  if(event.button!==0||event.target.closest('.track-surface,.transport,.context-menu,.canvas-playhead,.canvas-playhead-track,input,textarea,select,[contenteditable="true"]'))return;
   event.preventDefault();void sweeps.add(event.clientX+window.scrollX,event.clientY+window.scrollY,event.shiftKey);
 });
 const waveformSizes=Array(names.length).fill('');
@@ -109,7 +112,7 @@ function tint(hex,amount){return '#'+[1,3,5].map(index=>Math.round(255*(1-amount
 function applyTrackColor(t){
   const color=palette.find(color=>color.id===trackColors[t]);if(!color)return;
   const ink=color.id==='blue'?'#ffffff':'#1e1e1e';
-  const values={'--track-color':color.hex,'--track-active-ink':ink,'--track-rest':tint(color.hex,.12),'--track-alt':tint(color.hex,.18),'--track-hover':tint(color.hex,.3)};
+  const values={'--track-color':color.hex,'--track-active-ink':ink,'--track-sweep-ink':color.id==='blue'?'#ffffff':'#594dff','--track-rest':tint(color.hex,.12),'--track-alt':tint(color.hex,.18),'--track-hover':tint(color.hex,.3)};
   Object.entries(values).forEach(([key,value])=>rows[t].style.setProperty(key,value));
 }
 rows.forEach((_,t)=>applyTrackColor(t));
@@ -290,6 +293,7 @@ function updatePlayhead(){
     head.style[vertical?'top':'left']=Math.floor(beat/loopBeats[t]*(vertical?sizes[t].height:sizes[t].width)+1e-7)+'px';
     head.hidden=!active||ctx.currentTime<playback[t].startedAt;
     cells[t].forEach(cell=>cell.classList.toggle('active',(active||sweeps.trackActive(t))&&audible(t)));
+    sweepTrackHeads[t].innerHTML=audible(t)?sweeps.trackPositions(t).map(beat=>`<span class="sweep-track-head" style="${vertical?'top':'left'}:${Math.floor(beat/loopBeats[t]*(vertical?sizes[t].height:sizes[t].width))}px"></span>`).join(''):'';
   });
 }
 function animate(){layout.tick();updatePlayhead();requestAnimationFrame(animate);}
