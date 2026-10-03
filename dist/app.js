@@ -369,20 +369,20 @@ function bufferForLoop(t){
   for(let offset=0;offset<length;offset+=samples.length)buffer.copyToChannel(samples.subarray(0,Math.min(samples.length,length-offset)),0,offset);
   expandedArrangements[t]=buffer;return buffer;
 }
-function startSource(t,at,beat){
+function startSource(t,at,beat,timelineBeat=beat){
   const state=playback[t],source=ctx.createBufferSource();source.buffer=bufferForLoop(t);source.loop=true;
   source.loopStart=0;source.loopEnd=loopBeats[t]*60/baseTempo;
   source.playbackRate.value=tempo/baseTempo;source.connect(gains[t]);source.start(at,beat*60/baseTempo);
-  state.beat=beat;state.source=source;state.startedAt=at;state.running=true;state.starting=false;
+  state.beat=timelineBeat;state.source=source;state.startedAt=at;state.running=true;state.starting=false;
   source.onended=()=>source.disconnect();
 }
 function resizeLoop(t,beats){
   if(loopBeats[t]===beats)return;
-  const state=playback[t],beat=currentBeat(t)%beats;loopBeats[t]=beats;
+  const state=playback[t],timelineBeat=state.running?state.beat+Math.max(0,ctx.currentTime-state.startedAt)*tempo/60:state.beat,beat=timelineBeat%beats;loopBeats[t]=beats;
   if(state.running){
     const at=Math.max(ctx.currentTime,state.startedAt);
     try{state.source.stop();}catch{}
-    startSource(t,at,beat);
+    startSource(t,at,beat,timelineBeat);
   }else state.beat=beat;
 }
 async function startTracks(indices){
