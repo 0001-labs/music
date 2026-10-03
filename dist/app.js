@@ -20,6 +20,7 @@ try{const saved=JSON.parse(localStorage.getItem(colorKey));if(Array.isArray(save
 const muted=Array(names.length).fill(false),solo=Array(names.length).fill(false);
 const baseTempo=112,totalBeats=32,pixelsPerBeat=40;
 const loopBeats=names.map(()=>totalBeats);
+const displayZoom=names.map(()=>1);
 const trackPeaks=clips.map(row=>row.flatMap(clip=>clip.peaks));
 const expandedArrangements=names.map(()=>null);
 const $=selector=>document.querySelector(selector);
@@ -256,6 +257,7 @@ function updateWaveforms(sizes){
     waveformSizes[t]=key;
     const length=vertical?height:width,part=length/4,displayPixelsPerBeat=length/beats;
     const zoom=displayPixelsPerBeat/pixelsPerBeat,change=Math.round((zoom-1)*100),tag=zoomTags[t];
+    displayZoom[t]=zoom;applyZoomColor(t);
     tag.hidden=change===0;tag.innerHTML=`<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="5" cy="5" r="3.5"/><path d="M7.5 7.5 11 11"/></svg><span>${change>0?'+':change<0?'−':''}${Math.abs(change)}%</span>`;
     tag.title=`Display zoom ${Math.round(zoom*100)}%; audio tempo unchanged`;tag.setAttribute('aria-label',tag.title);
     rows[t].style.setProperty('--clip-span',8*displayPixelsPerBeat+'px');
@@ -271,12 +273,19 @@ function updateWaveforms(sizes){
   });
 }
 function tint(hex,amount){return '#'+[1,3,5].map(index=>Math.round(255*(1-amount)+parseInt(hex.slice(index,index+2),16)*amount).toString(16).padStart(2,'0')).join('');}
+function applyZoomColor(t){
+  const color=palette.find(color=>color.id===trackColors[t]),hex=color?.hex||'#99ff73',zoom=displayZoom[t];
+  const darken=Math.min(.22,Math.max(0,Math.log2(zoom))*.12);
+  const display=zoom<1?tint(hex,Math.max(.15,zoom)):'#'+[1,3,5].map(index=>Math.round(parseInt(hex.slice(index,index+2),16)*(1-darken)).toString(16).padStart(2,'0')).join('');
+  rows[t].style.setProperty('--track-display-color',display);
+  rows[t].style.setProperty('--track-active-ink',color?.id==='blue'&&zoom>=.75?'#ffffff':color?'#1e1e1e':'#295a1c');
+}
 function applyTrackColor(t){
   const color=palette.find(color=>color.id===trackColors[t]);
-  if(!color){['--track-color','--track-active-ink','--track-sweep-ink','--track-rest','--track-alt','--track-hover'].forEach(key=>rows[t].style.setProperty(key,''));return;}
+  if(!color){['--track-color','--track-active-ink','--track-sweep-ink','--track-rest','--track-alt','--track-hover'].forEach(key=>rows[t].style.setProperty(key,''));applyZoomColor(t);return;}
   const ink=color.id==='blue'?'#ffffff':'#1e1e1e';
   const values={'--track-color':color.hex,'--track-active-ink':ink,'--track-sweep-ink':color.id==='blue'?'#ffffff':'#594dff','--track-rest':tint(color.hex,.12),'--track-alt':tint(color.hex,.18),'--track-hover':tint(color.hex,.3)};
-  Object.entries(values).forEach(([key,value])=>rows[t].style.setProperty(key,value));
+  Object.entries(values).forEach(([key,value])=>rows[t].style.setProperty(key,value));applyZoomColor(t);
 }
 rows.forEach((_,t)=>applyTrackColor(t));
 const menu=$('#track-menu'),orientationButton=$('#orientation'),deleteButton=$('#delete-track');
