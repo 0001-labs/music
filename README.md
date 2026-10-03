@@ -6,7 +6,7 @@ A small open-source arrangement player prototype inspired by Ezo and Live. Each 
 
 Open the published site, or run `python3 -m http.server 8000 --directory dist` from this folder.
 
-Play runs through the eight-bar arrangement from left to right and loops back to the beginning. Click the timeline or bar ruler to seek. M mutes a track; S solos it. Tempo runs from 70–160 BPM. Space plays and pauses; Stop resets the position. All state stays in memory. The working surface contains only the transport and arrangement, with no visible header or footer.
+Play runs through the eight-bar arrangement from left to right and loops back to the beginning. Click the timeline or bar ruler to seek. M mutes a track; S solos it. Tempo runs from 70–160 BPM. Space plays and pauses; Stop resets the position. All state stays in memory. The working surface contains the transport and arrangement, with a small Music by 0001 credit near the bottom of the page.
 
 Includes 24 original synthesized WAV loops. The six tracks are Kick, Snare, Hats, Bass, Keys, and Air. Source tempo is 112 BPM, in A minor. Waveforms show measured amplitude peaks. Tempo changes alter pitch along with playback speed in this first prototype.
 
