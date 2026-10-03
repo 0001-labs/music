@@ -2,6 +2,21 @@
 // Each horizontal or vertical track owns its source and playback position.
 const clips=window.MUSIC_CLIPS;
 const names=['Kick','Snare','Hats','Bass','Keys','Air','Pulse'];
+// Ezo note colors, from shared/noteAppearance.ts.
+const palette=[
+  {id:'white',name:'White',hex:'#ffffff'},
+  {id:'red',name:'Tuned red',hex:'#ff5f5f'},
+  {id:'orange',name:'Orange',hex:'#fec20d'},
+  {id:'yellow',name:'Yellow',hex:'#eaff00'},
+  {id:'light-green',name:'Apple green',hex:'#99ff73'},
+  {id:'green',name:'Every green',hex:'#979441'},
+  {id:'light-blue',name:'Zenith blue',hex:'#ccccff'},
+  {id:'blue',name:'Sharp blue',hex:'#594dff'},
+  {id:'pink',name:'Pink',hex:'#f5aad1'}
+];
+const colorKey='music-track-colors-v1';
+let trackColors=names.map(()=>null);
+try{const saved=JSON.parse(localStorage.getItem(colorKey));if(Array.isArray(saved)&&saved.length===names.length)trackColors=saved.map(id=>palette.some(color=>color.id===id)?id:null);}catch{}
 const muted=Array(names.length).fill(false),solo=Array(names.length).fill(false);
 const baseTempo=112,totalBeats=32;
 const $=selector=>document.querySelector(selector);
@@ -33,7 +48,29 @@ const layout=window.createMusicLayout(rows,(t,vertical)=>{
   playheads[t].classList.toggle('vertical-playhead',vertical);
   playheads[t].style.left='0px';playheads[t].style.top='0px';
 });
+function tint(hex,amount){return '#'+[1,3,5].map(index=>Math.round(255*(1-amount)+parseInt(hex.slice(index,index+2),16)*amount).toString(16).padStart(2,'0')).join('');}
+function applyTrackColor(t){
+  const color=palette.find(color=>color.id===trackColors[t]);if(!color)return;
+  const ink=color.id==='blue'?'#ffffff':'#1e1e1e';
+  const values={'--track-color':color.hex,'--track-active-ink':ink,'--track-rest':tint(color.hex,.12),'--track-alt':tint(color.hex,.18),'--track-hover':tint(color.hex,.3)};
+  Object.entries(values).forEach(([key,value])=>rows[t].style.setProperty(key,value));
+}
+rows.forEach((_,t)=>applyTrackColor(t));
 const menu=$('#track-menu'),orientationButton=$('#orientation');
+$('#track-colors').innerHTML=palette.map(color=>`<button class="color-swatch" data-color="${color.id}" role="menuitemradio" aria-checked="false" aria-label="${color.name}" title="${color.name}" style="--swatch-ink:${color.id==='blue'?'#fff':'#1e1e1e'}"><span style="background:${color.hex}" aria-hidden="true"></span></button>`).join('');
+const swatchButtons=Array.from(menu.querySelectorAll('[data-color]'));
+swatchButtons.forEach(button=>button.addEventListener('click',()=>{
+  if(menuTrack===null)return;trackColors[menuTrack]=button.dataset.color;applyTrackColor(menuTrack);
+  try{localStorage.setItem(colorKey,JSON.stringify(trackColors));}catch{}
+  closeMenu(true);
+}));
+const menuItems=[orientationButton,...swatchButtons];
+menu.addEventListener('keydown',event=>{
+  if(!['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+  event.preventDefault();const index=Math.max(0,menuItems.indexOf(document.activeElement));
+  const next=event.key==='Home'?0:event.key==='End'?menuItems.length-1:(index+(['ArrowUp','ArrowLeft'].includes(event.key)?-1:1)+menuItems.length)%menuItems.length;
+  menuItems[next].focus();
+});
 let menuTrack=null;
 function closeMenu(restoreFocus=false){
   const t=menuTrack;menu.hidden=true;menuTrack=null;
@@ -41,7 +78,8 @@ function closeMenu(restoreFocus=false){
 }
 function openMenu(t,clientX,clientY){
   menuTrack=t;orientationButton.textContent=layout.getPositions()[t].vertical?'Make horizontal':'Make vertical';
-  const left=Math.max(0,Math.min(window.innerWidth-120,clientX)),top=Math.max(0,Math.min(window.innerHeight-20,clientY));
+  swatchButtons.forEach(button=>button.setAttribute('aria-checked',button.dataset.color===(trackColors[t]||'light-green')));
+  const left=Math.max(0,Math.min(window.innerWidth-120,clientX)),top=Math.max(0,Math.min(window.innerHeight-80,clientY));
   menu.style.left=Math.floor((left+window.scrollX)/20)*20+'px';menu.style.top=Math.floor((top+window.scrollY)/20)*20+'px';
   menu.hidden=false;orientationButton.focus();
 }
@@ -179,7 +217,7 @@ function updatePlayhead(){
 function animate(){layout.tick();updatePlayhead();requestAnimationFrame(animate);}
 if(document.modelContext?.registerTool){
   const lifecycle=new AbortController();
-  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,bars:8,tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),muted:muted[t],solo:solo[t],position:layout.getPositions()[t]}))};}};
+  const tool={name:'read_music_arrangement',description:'Read each track’s independent playback position, tempo, and controls.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).length)throw new Error('Expected an empty object.');return{playing:hasPlayback(),tempo,bars:8,tracks:names.map((name,t)=>({name,playing:playback[t].running,loading:playback[t].starting,beat:currentBeat(t),muted:muted[t],solo:solo[t],color:trackColors[t]||'light-green',position:layout.getPositions()[t]}))};}};
   try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }
