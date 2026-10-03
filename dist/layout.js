@@ -24,47 +24,60 @@ window.createMusicLayout=function(rows,onOrientationChange){
     canvas.style.width=Math.ceil(width/unit)*unit+'px';
     canvas.style.height=Math.ceil(height/unit)*unit+'px';
   }
-  function overlaps(t,next,limit=positions.length){
-    return positions.some((p,i)=>i!==t&&i<limit&&next.x<p.x+p.width&&next.x+next.width>p.x&&next.y<p.y+p.height&&next.y+next.height>p.y);
-  }
-  function nearestFree(t,position,limit=positions.length){
+  function intersects(a,b){return a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;}
+  function overlaps(t,next,limit=positions.length){return positions.some((p,i)=>i!==t&&i<limit&&intersects(next,p));}
+  function freePosition(position,occupied){
     const xs=new Set([position.x,0]),ys=new Set([position.y,0]);
-    positions.forEach((p,i)=>{
-      if(i===t||i>=limit)return;
+    occupied.forEach(p=>{
       xs.add(snap(p.x-position.width));xs.add(p.x+p.width);
       ys.add(snap(p.y-position.height));ys.add(p.y+p.height);
     });
     const candidates=Array.from(xs).flatMap(x=>Array.from(ys,y=>({...position,x,y})));
     candidates.sort((a,b)=>(a.x-position.x)**2+(a.y-position.y)**2-((b.x-position.x)**2+(b.y-position.y)**2)||a.y-b.y||a.x-b.x);
-    return candidates.find(p=>!overlaps(t,p,limit));
+    return candidates.find(p=>occupied.every(other=>!intersects(p,other)));
   }
+  function nearestFree(t,position,limit=positions.length){return freePosition(position,positions.filter((_,i)=>i!==t&&i<limit));}
   let repaired=false;
   positions.forEach((p,t)=>{if(overlaps(t,p,t)){positions[t]=nearestFree(t,p,t);repaired=true;}});
   if(repaired)save();
+  function paint(t){
+    const next=positions[t],changed=rows[t].classList.contains('vertical-track')!==next.vertical;
+    rows[t].classList.toggle('vertical-track',next.vertical);rows[t].classList.toggle('track-row',!next.vertical);rows[t].classList.toggle('compact-track',!next.vertical&&next.height===20);
+    if(changed)onOrientationChange?.(t,next.vertical);
+    const floating=drag?.active&&!drag.resize&&drag.t===t;
+    Object.assign(rows[t].style,{left:(floating?drag.rawX:next.x)+'px',top:(floating?drag.rawY:next.y)+'px',width:next.width+'px',height:next.height+'px'});
+  }
+  function paintAll(){rows.forEach((_,t)=>paint(t));resizeCanvas();}
   function place(t,x,y,width=positions[t].width,height=positions[t].height,vertical=positions[t].vertical){
     const next={x:snap(x),y:snap(y),vertical,width:sizeSnap(t,'width',width,vertical),height:sizeSnap(t,'height',height,vertical)};
     if(overlaps(t,next))return false;
-    const changed=rows[t].classList.contains('vertical-track')!==vertical;
-    positions[t]=next;
-    rows[t].classList.toggle('vertical-track',vertical);rows[t].classList.toggle('track-row',!vertical);rows[t].classList.toggle('compact-track',!vertical&&next.height===20);
-    if(changed)onOrientationChange?.(t,vertical);
-    Object.assign(rows[t].style,{left:next.x+'px',top:next.y+'px',width:next.width+'px',height:next.height+'px'});
-    resizeCanvas();return true;
+    positions[t]=next;paint(t);resizeCanvas();return true;
   }
-  positions.forEach((p,t)=>place(t,p.x,p.y,p.width,p.height,p.vertical));
+  paintAll();
+  function reflow(t,target,baseline){
+    const next=baseline.map(p=>({...p})),occupied=[target],displaced=[];
+    next[t]=target;
+    baseline.forEach((p,i)=>{if(i!==t){if(intersects(p,target))displaced.push(i);else occupied.push(p);}});
+    displaced.forEach(i=>{next[i]=freePosition(baseline[i],occupied);occupied.push(next[i]);});
+    positions=next;paintAll();
+  }
   function move(){
     if(!drag?.active)return;
     const dx=drag.clientX+window.scrollX-drag.startX,dy=drag.clientY+window.scrollY-drag.startY;
     if(drag.resize)place(drag.t,drag.x,drag.y,drag.width+dx,drag.height+dy);
-    else place(drag.t,drag.x+dx,drag.y+dy);
+    else{
+      drag.rawX=Math.max(0,drag.x+dx);drag.rawY=Math.max(0,drag.y+dy);
+      reflow(drag.t,{...drag.baseline[drag.t],x:snap(drag.rawX),y:snap(drag.rawY)},drag.baseline);
+    }
   }
   function finish(cancel=false){
     if(!drag)return;
     const state=drag;drag=null;
     if(state.active){
-      if(cancel)place(state.t,state.x,state.y,state.width,state.height);else save();
+      if(cancel)positions=state.baseline.map(p=>({...p}));
       suppressClick=state.t;rows[state.t].classList.remove('dragging');rows[state.t].classList.remove('resizing');
       document.body.classList.remove('moving-track');document.body.classList.remove('resizing-track');
+      paintAll();if(!cancel)save();
       if(rows[state.t].hasPointerCapture(state.id))rows[state.t].releasePointerCapture(state.id);
     }
   }
@@ -74,7 +87,7 @@ window.createMusicLayout=function(rows,onOrientationChange){
     row.addEventListener('pointerdown',event=>{
       if(event.button!==0||!event.isPrimary||event.target.closest('[data-track-play],[data-mute],[data-solo]'))return;
       suppressClick=null;
-      drag={t,id:event.pointerId,startX:event.clientX+window.scrollX,startY:event.clientY+window.scrollY,clientX:event.clientX,clientY:event.clientY,...positions[t],resize:!!event.target.closest('[data-resize]'),active:false};
+      drag={t,id:event.pointerId,startX:event.clientX+window.scrollX,startY:event.clientY+window.scrollY,clientX:event.clientX,clientY:event.clientY,...positions[t],baseline:positions.map(p=>({...p})),resize:!!event.target.closest('[data-resize]'),active:false};
     });
     row.addEventListener('click',event=>{
       if(event.detail!==0&&suppressClick===t){suppressClick=null;event.preventDefault();event.stopImmediatePropagation();}
@@ -84,9 +97,9 @@ window.createMusicLayout=function(rows,onOrientationChange){
       const resize=!!event.target?.closest('[data-resize]');
       if((event.altKey||resize)&&steps[event.key]){
         event.preventDefault();event.stopPropagation();const [x,y]=steps[event.key];
-        row.style.zIndex=++layer;
+        finish(true);row.style.zIndex=++layer;
         if(resize)place(t,positions[t].x,positions[t].y,positions[t].width+Math.sign(x)*sizeStep(t,'width'),positions[t].height+Math.sign(y)*sizeStep(t,'height'));
-        else place(t,positions[t].x+x,positions[t].y+y);
+        else reflow(t,{...positions[t],x:snap(positions[t].x+x),y:snap(positions[t].y+y)},positions);
         save();
       }
     });
