@@ -65,6 +65,7 @@ $('#piano-track').innerHTML=`<div class="track-row track-surface" data-track="7"
 const rows=Array.from(document.querySelectorAll('.track-surface'));
 const cells=rows.map(row=>Array.from(row.querySelectorAll('.clip')));
 const playheads=rows.map(row=>row.querySelector('.playhead'));
+const zoomTags=rows.map(row=>{const tag=document.createElement('span');tag.className='track-zoom-tag';tag.hidden=true;row.appendChild(tag);return tag;});
 const loopIndicators=rows.map(row=>{const icon=document.createElement('span');icon.className='track-loop-indicator';icon.textContent='↻';icon.setAttribute('aria-label','Looping');icon.title='Looping';icon.hidden=true;row.appendChild(icon);return icon;});
 const loopBoundaries=rows.map(row=>{
   const layer=document.createElement('div');layer.className='loop-boundaries';layer.setAttribute('aria-hidden','true');row.appendChild(layer);return layer;
@@ -254,6 +255,9 @@ function updateWaveforms(sizes){
     const key=`${trackView},${width},${height},${vertical},${beats}`;if(waveformSizes[t]===key)return;
     waveformSizes[t]=key;
     const length=vertical?height:width,part=length/4,displayPixelsPerBeat=length/beats;
+    const zoom=displayPixelsPerBeat/pixelsPerBeat,change=Math.round((zoom-1)*100),tag=zoomTags[t];
+    tag.hidden=change===0;tag.innerHTML=`<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="5" cy="5" r="3.5"/><path d="M7.5 7.5 11 11"/></svg><span>${change>0?'+':change<0?'−':''}${Math.abs(change)}%</span>`;
+    tag.title=`Display zoom ${Math.round(zoom*100)}%; audio tempo unchanged`;tag.setAttribute('aria-label',tag.title);
     rows[t].style.setProperty('--clip-span',8*displayPixelsPerBeat+'px');
     const clipWidth=vertical?width-6:part,clipHeight=vertical?part:height-4;
     cells[t].forEach((cell,c)=>{

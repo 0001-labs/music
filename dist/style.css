@@ -57,3 +57,5 @@ body{display:block}main{position:relative;width:100%;min-width:100%;min-height:1
 .track-loop-indicator{position:absolute;top:2px;right:49px;z-index:6;width:16px;height:16px;line-height:16px;text-align:center;font-size:14px;color:var(--track-active-ink,var(--ink));background:var(--track-color,var(--accent));pointer-events:none}.track-loop-indicator[hidden]{display:none}
 
 .vertical-track .track-loop-indicator{top:auto;bottom:49px;left:2px;right:auto}
+
+.track-zoom-tag{position:absolute;z-index:6;top:2px;right:69px;display:flex;align-items:center;gap:2px;height:16px;padding:0 3px;background:#ffffffdf;color:var(--ink);font-size:10px;line-height:16px;border-radius:3px;pointer-events:auto}.track-zoom-tag svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1.2}.track-zoom-tag[hidden]{display:none}.vertical-track .track-zoom-tag{top:auto;bottom:70px;right:auto;left:2px}
