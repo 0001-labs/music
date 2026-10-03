@@ -1,9 +1,9 @@
 'use strict';
 // Shift spectral pitch without changing sample count or musical duration.
-window.musicPitchBuffer=function(ctx,original,semitones){
-  if(!semitones)return original;
-  const size=1024,hop=256,half=size/2,ratio=2**(semitones/12),input=original.getChannelData(0),length=input.length;
-  const result=ctx.createBuffer(1,length,original.sampleRate),output=result.getChannelData(0),weight=new Float32Array(length);
+// Runs in a worker (this same file) so a pitch change never freezes the page.
+function musicPitchSamples(input,semitones){
+  const size=1024,hop=256,half=size/2,ratio=2**(semitones/12),length=input.length;
+  const output=new Float32Array(length),weight=new Float32Array(length);
   const windowing=Float64Array.from({length:size},(_,i)=>.5-.5*Math.cos(2*Math.PI*i/size));
   const re=new Float64Array(size),im=new Float64Array(size),previous=new Float64Array(half+1),phase=new Float64Array(half+1),magnitude=new Float64Array(half+1),frequency=new Float64Array(half+1);
   function fft(inverse){
@@ -26,5 +26,21 @@ window.musicPitchBuffer=function(ctx,original,semitones){
     for(let i=0;i<size;i++){const index=start+i;if(index>=0&&index<length){output[index]+=re[i]*windowing[i];weight[index]+=windowing[i]**2;}}
   }
   for(let i=0;i<length;i++)output[i]=weight[i]?output[i]/weight[i]:0;
-  return result;
-};
+  return output;
+}
+if(typeof window==='undefined'){
+  self.onmessage=event=>{const {id,samples,semitones}=event.data,result=musicPitchSamples(samples,semitones);self.postMessage({id,samples:result},[result.buffer]);};
+}else{
+  let worker=null,next=0;const waiting=new Map();
+  window.musicPitch=function(samples,semitones){
+    if(worker===null){
+      try{
+        worker=new Worker('pitch.js');
+        worker.onmessage=event=>{const job=waiting.get(event.data.id);waiting.delete(event.data.id);job?.resolve(event.data.samples);};
+        worker.onerror=()=>{worker=false;waiting.forEach(job=>job.resolve(musicPitchSamples(job.samples,job.semitones)));waiting.clear();};
+      }catch{worker=false;}
+    }
+    if(!worker)return Promise.resolve(musicPitchSamples(samples,semitones));
+    return new Promise(resolve=>{const id=++next;waiting.set(id,{resolve,samples,semitones});worker.postMessage({id,samples,semitones});});
+  };
+}
