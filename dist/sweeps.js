@@ -30,11 +30,11 @@ window.createMusicSweeps=function(options){
   }
   function buildMix(head,positions){
     const {ctx,arrangements,pixelsPerBeat}=options.audio(),tracks=geometry(head,positions);
-    head.end=head.customEnd??Math.max(head.origin+20,...tracks.map(p=>p.end));
+    head.end=head.customEnd??head.fixedEnd??Math.max(head.origin+20,...tracks.map(p=>p.end));
     const span=head.end-head.origin;
     const initialBeats=Math.max(span/pixelsPerBeat,...tracks.map(p=>p.vertical===head.vertical?p.beats*span/(p.end-p.start):p.beats));
     head.beatPixels??=span/initialBeats;
-    const cycleBeats=head.customEnd!==undefined?span/head.beatPixels:Math.max(span/head.beatPixels,...tracks.map(p=>p.vertical===head.vertical?Math.max(0,(p.start-head.origin)/head.beatPixels)+p.beats:p.beats)),rate=arrangements[0].sampleRate;
+    const cycleBeats=head.customEnd!==undefined||head.fixedEnd!==undefined?span/head.beatPixels:Math.max(span/head.beatPixels,...tracks.map(p=>p.vertical===head.vertical?Math.max(0,(p.start-head.origin)/head.beatPixels)+p.beats:p.beats)),rate=arrangements[0].sampleRate;
     head.cycleBeats=cycleBeats;
     const length=Math.max(1,Math.round(cycleBeats*60/options.baseTempo*rate));
     const mix=ctx.createBuffer(1,length,rate),samples=mix.getChannelData(0);head.voices=[];
@@ -115,7 +115,7 @@ window.createMusicSweeps=function(options){
     const origin=Math.max(0,Math.round((vertical?y:x)/placementStep)*placementStep);
     const head={origin,position:origin,beat:0,cross:Math.max(0,Math.round((vertical?x:y)/placementStep)*placementStep),vertical,looping,startedAt:0,running:false,loading:false,paused:false,epoch:0,voices:[],skipped:new Set(),source:null};
     const tracks=geometry(head,options.positions());if(!tracks.length||Math.max(...tracks.map(p=>p.end))<=origin)return;
-    head.end=Math.max(...tracks.map(p=>p.end));
+    head.end=Math.max(...tracks.map(p=>p.end));if(looping)head.fixedEnd=head.end;
     const element=document.createElement('div');element.className='canvas-playhead-track'+(vertical?' down':'');element.hidden=!looping;element.setAttribute('role','group');element.setAttribute('aria-label',looping?'Global playback loop':'Global arrangement playback');
     const stop=document.createElement('button');stop.className='canvas-loop-stop';stop.textContent='■';stop.setAttribute('aria-label','Stop global playback loop');stop.title='Stop loop';
     const progress=document.createElement('span');progress.className='canvas-loop-progress';progress.setAttribute('aria-hidden','true');
