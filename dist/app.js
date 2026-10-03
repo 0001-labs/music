@@ -42,9 +42,9 @@ function render(){
     row.classList.toggle('has-track-state',muted[t]||solo[t]);
     const mute=row.querySelector('[data-mute]'),s=row.querySelector('[data-solo]'),trackPlay=row.querySelector('[data-track-play]');
     const active=playback[t].running||playback[t].starting;
-    trackPlay.textContent=active?'Ⅱ':'▶';trackPlay.setAttribute('aria-pressed',active);
-    trackPlay.setAttribute('aria-label',(active?'Pause ':'Play ')+names[t]);
-    trackPlay.title=(active?'Pause ':'Play ')+names[t];
+    trackPlay.textContent=active?'■':'▶';trackPlay.setAttribute('aria-pressed',active);
+    trackPlay.setAttribute('aria-label',(active?'Stop ':'Play ')+names[t]);
+    trackPlay.title=(active?'Stop ':'Play ')+names[t];
     mute.classList.toggle('muted',muted[t]);mute.setAttribute('aria-pressed',muted[t]);
     s.classList.toggle('soloed',solo[t]);s.setAttribute('aria-pressed',solo[t]);
   });
@@ -114,7 +114,7 @@ function pause(){
 }
 function stop(){pause();barOrigin=null;playback.forEach(state=>state.beat=0);updatePlayhead();}
 function toggleTrack(t){
-  if(playback[t].running||playback[t].starting){pauseTrack(t);if(!playback.some(state=>state.starting))message.textContent='';render();}
+  if(playback[t].running||playback[t].starting){pauseTrack(t);playback[t].beat=0;if(!playback.some(state=>state.starting))message.textContent='';render();}
   else void startTracks([t]);
 }
 function toggleAll(){if(hasPlayback())pause();else void startTracks(names.map((_,t)=>t));}
