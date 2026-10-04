@@ -39,7 +39,7 @@ window.createMusicBlocks=function(options){
   function pause(item){item.beat=phase(item);halt(item);}
   function stop(){items.forEach(item=>halt(item,true));}
   function paint(item){
-    if(item.paintedColor!==item.color){item.paintedColor=item.color;const color=options.palette.find(p=>p.id===item.color);for(const [key,value] of [['--block-rest',color?options.tint(color.hex,.55):''],['--block-color',color?color.hex:''],['--block-ink',color?.id==='blue'?'#fff':'']])item.element.style.setProperty(key,value);}
+    if(item.paintedColor!==item.color){item.paintedColor=item.color;const color=options.palette.find(p=>p.id===item.color);for(const [key,value] of [['--block-rest',color?options.tint(color.hex,.32):''],['--block-color',color?color.hex:''],['--block-ink',color?'#111215':'']])item.element.style.setProperty(key,value);}
     {const pitch=item.pitch||0,text=pitch?`${pitch>0?'+':'−'}${Math.abs(pitch)}`:'↓',handle=item.pitchHandle;handle.hidden=item.opened;if(handle.textContent!==text){handle.textContent=text;handle.dataset.active=String(pitch!==0);handle.title=`Pitch ${pitch>0?'+':''}${pitch} semitones; drag up or down`;handle.setAttribute('aria-label',handle.title);}}
     item.fx?.apply(rectangle(item));
     // Display scale tag, as on tracks: shown whenever the clip is drawn narrower or wider than 40px per beat.
@@ -55,7 +55,7 @@ window.createMusicBlocks=function(options){
         if(item.children)parts=item.children.map(child=>({x:child.x,y:child.y,width:child.width,height:child.height,color:child.color}));
         else{const state=item.data.state,area=metrics(item.data);parts=state.positions.flatMap((p,t)=>p.deleted?[]:[{x:p.x-area.x,y:p.y-area.y,width:p.width,height:p.height,color:state.colors[t]}]);}
         const across=Math.max(step,Math.ceil(Math.max(0,...parts.map(p=>p.x+p.width))/step)*step),down=Math.max(1,...parts.map(p=>p.y+p.height));
-        item.mini.innerHTML=parts.map(p=>`<i style="left:${p.x/across*100}%;top:${p.y/down*100}%;width:${p.width/across*100}%;height:${p.height/down*100}%;background:${options.palette.find(color=>color.id===p.color)?.hex||'#d6d6d6'}"></i>`).join('');
+        item.mini.innerHTML=parts.map(p=>`<i style="left:${p.x/across*100}%;top:${p.y/down*100}%;width:${p.width/across*100}%;height:${p.height/down*100}%;background:${options.palette.find(color=>color.id===p.color)?.hex||'#3d4049'}"></i>`).join('');
       }
       item.mini.style.width=(item.sourceBeats||item.beats)/item.beats*100+'%';
     }

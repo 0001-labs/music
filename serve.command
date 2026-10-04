@@ -8,4 +8,10 @@ URL="http://localhost:$PORT/"
 echo "Music is running at $URL"
 echo "Close this window or press Control-C to stop."
 ( sleep 1; open -a Safari "$URL" ) &
-exec python3 -m http.server "$PORT" --bind 127.0.0.1
+# Python's plain http.server queues only five connections; a browser loading the app opens more, and the rest get reset.
+exec python3 - "$PORT" <<'PY'
+import http.server, sys
+class Server(http.server.ThreadingHTTPServer):
+    request_queue_size = 128
+http.server.test(HandlerClass=http.server.SimpleHTTPRequestHandler, ServerClass=Server, port=int(sys.argv[1]), bind="127.0.0.1")
+PY

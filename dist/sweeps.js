@@ -2,7 +2,7 @@
 // A global canvas loop mixes the clips it covers on a shared audio-clock timeline.
 window.createMusicSweeps=function(options){
   const {placementStep}=window.musicGrid;
-  const heads=[],regionColors=['#e9e4ff','#dceeff','#ffe7ed','#fff0cf','#dff3e5','#f5e4d5','#e0f3f1','#eee7d7'];let activeSignature='',nextRegionColor=0;
+  const heads=[],regionColors=['#2a2547','#1d2c45','#3d2232','#3a311b','#1d3628','#3b2a1e','#1b3535','#33302b'];let activeSignature='',nextRegionColor=0;
   const axis=p=>({start:p.x,end:p.x+p.width,cross:p.y,span:p.height});
   // Every region runs the full height of the board, top to bottom.
   function regionBounds(head){return {left:head.origin,top:0,right:head.end,bottom:options.canvas.offsetHeight||960};}
@@ -60,7 +60,7 @@ window.createMusicSweeps=function(options){
     head.progress.style.left=Math.floor(coordinate(head)-head.origin)+'px';
     head.element.classList.toggle('paused',!head.running&&!head.loading);head.cursor.classList.toggle('paused',!head.running&&!head.loading);
     for(const [button,value,kind] of [[head.muteButton,head.muted,'muted'],[head.soloButton,head.solo,'soloed']])if(button){button.classList.toggle(kind,value);button.setAttribute('aria-pressed',String(value));}
-    if(head.playButton){const active=head.running||head.loading,icon=active?'Ⅱ':'▶';if(head.playButton.textContent!==icon)head.playButton.textContent=icon;head.playButton.title=active?'Pause white playback area':'Play white playback area';head.playButton.setAttribute('aria-label',head.playButton.title);}
+    if(head.playButton){const active=head.running||head.loading,icon=active?'Ⅱ':'▶';if(head.playButton.textContent!==icon)head.playButton.textContent=icon;head.playButton.title=active?'Pause loop region':'Play loop region';head.playButton.setAttribute('aria-label',head.playButton.title);}
   }
   function buildMix(head,positions){
     const {ctx,arrangements,pixelsPerBeat}=options.audio(),tracks=geometry(head,positions);
@@ -134,7 +134,7 @@ window.createMusicSweeps=function(options){
     paint(head,options.positions());arrangeTabs();options.changed();
   }
   function areaResizeHandle(head){
-    const handle=document.createElement('button');handle.className='global-loop-resize';handle.title='Resize white loop end';handle.setAttribute('aria-label','Resize white loop end; use arrow keys');
+    const handle=document.createElement('button');handle.className='global-loop-resize';handle.title='Resize loop region end';handle.setAttribute('aria-label','Resize loop region end; use arrow keys');
     let drag=null;
     handle.addEventListener('pointerdown',event=>{
       if(event.button!==0||!event.isPrimary)return;

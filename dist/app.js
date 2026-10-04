@@ -4,17 +4,20 @@ const clips=window.MUSIC_CLIPS;
 let firstVisit=false;try{firstVisit=localStorage.getItem('music-grid-layout-four-bar-v1')===null&&localStorage.getItem('music-arrangement-blocks-v1')===null;}catch{}
 const names=['Kick','Snare','Hats','Bass','Keys','Air','Pulse','Piano'];
 // Ezo note colors, from shared/noteAppearance.ts.
+// Clip colors for a dark board: one brightness band around the hue wheel, so dark waveform ink reads on every one.
+// The ids are the saved ones from the first palette, so earlier arrangements keep their colors.
 const palette=[
-  {id:'white',name:'White',hex:'#ffffff'},
-  {id:'red',name:'Tuned red',hex:'#ff5f5f'},
-  {id:'orange',name:'Orange',hex:'#fec20d'},
-  {id:'yellow',name:'Yellow',hex:'#eaff00'},
-  {id:'light-green',name:'Apple green',hex:'#99ff73'},
-  {id:'green',name:'Every green',hex:'#979441'},
-  {id:'light-blue',name:'Zenith blue',hex:'#ccccff'},
-  {id:'blue',name:'Sharp blue',hex:'#594dff'},
-  {id:'pink',name:'Pink',hex:'#f5aad1'}
+  {id:'white',name:'Silver',hex:'#c4c8d2'},
+  {id:'red',name:'Red',hex:'#ff5a5f'},
+  {id:'orange',name:'Orange',hex:'#ff9446'},
+  {id:'yellow',name:'Yellow',hex:'#f5d547'},
+  {id:'light-green',name:'Lime',hex:'#a3e65c'},
+  {id:'green',name:'Teal',hex:'#33d1a8'},
+  {id:'light-blue',name:'Sky',hex:'#57b8ff'},
+  {id:'blue',name:'Indigo',hex:'#8a7dff'},
+  {id:'pink',name:'Magenta',hex:'#ff62b4'}
 ];
+const surfaceRgb=[0x22,0x24,0x29],onColor='#111215',neutralColor='#8e929c';
 const colorKey='music-track-colors-v1';
 let trackColors=names.map(()=>null);
 try{const saved=JSON.parse(localStorage.getItem(colorKey));if(Array.isArray(saved)&&saved.length<=names.length)trackColors=names.map((_,t)=>palette.some(color=>color.id===saved[t])?saved[t]:null);}catch{}
@@ -187,19 +190,20 @@ function updateWaveforms(sizes){
     resizeLoop(t,beats);
   });
 }
-function tint(hex,amount){return '#'+[1,3,5].map(index=>Math.round(255*(1-amount)+parseInt(hex.slice(index,index+2),16)*amount).toString(16).padStart(2,'0')).join('');}
+// Mixes a clip color into the dark clip surface: amount 1 is the full color, 0 the bare surface.
+function tint(hex,amount){return '#'+[1,3,5].map((index,i)=>Math.round(surfaceRgb[i]*(1-amount)+parseInt(hex.slice(index,index+2),16)*amount).toString(16).padStart(2,'0')).join('');}
 function applyZoomColor(t){
-  const color=palette.find(color=>color.id===trackColors[t]),hex=color?.hex||'#d6d6d6',zoom=displayZoom[t];
+  const color=palette.find(color=>color.id===trackColors[t]),hex=color?.hex||neutralColor,zoom=displayZoom[t];
   const darken=Math.min(.22,Math.max(0,Math.log2(zoom))*.12);
   const display=zoom<1?tint(hex,Math.max(.15,zoom)):'#'+[1,3,5].map(index=>Math.round(parseInt(hex.slice(index,index+2),16)*(1-darken)).toString(16).padStart(2,'0')).join('');
   rows[t].style.setProperty('--track-display-color',display);
-  rows[t].style.setProperty('--track-active-ink',color?.id==='blue'&&zoom>=.75?'#ffffff':'#1e1e1e');
+  rows[t].style.setProperty('--track-active-ink',onColor);
 }
 function applyTrackColor(t){
-  // A track with no color chosen stays neutral grey; idle tracks show their color, playing ones fill with it.
+  // A track with no color chosen stays neutral grey; idle tracks show their color dimmed into the board, playing ones fill with it.
   const color=palette.find(color=>color.id===trackColors[t]);
-  const values=color?{'--track-color':color.hex,'--track-sweep-ink':color.id==='blue'?'#ffffff':'#594dff','--track-rest':tint(color.hex,.55),'--track-alt':tint(color.hex,.65),'--track-hover':tint(color.hex,.8)}
-    :{'--track-color':'#d6d6d6','--track-sweep-ink':'','--track-rest':'#fafafa','--track-alt':'#f0f0f0','--track-hover':'#e6e6e6'};
+  const values=color?{'--track-color':color.hex,'--track-sweep-ink':onColor,'--track-rest':tint(color.hex,.32),'--track-alt':tint(color.hex,.4),'--track-hover':tint(color.hex,.55)}
+    :{'--track-color':neutralColor,'--track-sweep-ink':'','--track-rest':'#222429','--track-alt':'#26282e','--track-hover':'#30333a'};
   Object.entries(values).forEach(([key,value])=>rows[t].style.setProperty(key,value));applyZoomColor(t);
 }
 rows.forEach((_,t)=>applyTrackColor(t));
@@ -584,7 +588,7 @@ blocks=window.createMusicBlocks({bpmRow,speedLabel,continueAsRegion(x,y,end,beat
   moveActive(dx,dy){const positions=layout.getPositions();positions.forEach(p=>{p.x=Math.max(0,p.x+dx);p.y=Math.max(0,p.y+dy);});layout.restore(positions);sweeps.translate(dx,dy);syncTrackPresence();},
   activePlayback:()=>playback.some((p,t)=>!layout.getPositions()[t].deleted&&(p.running||p.starting||sweeps.trackActive(t))),
   toggleActive(){const indices=names.map((_,t)=>t).filter(t=>!layout.getPositions()[t].deleted);if(indices.some(t=>playback[t].running||playback[t].starting)){indices.forEach(t=>{pauseTrack(t);playback[t].beat=0;sweeps.stopTrack(t);});render();}else void startTracks(indices);},
-  preview(data,area){return data.state.positions.map((p,t)=>{if(p.deleted)return '';const color=palette.find(c=>c.id===data.state.colors[t])?.hex||'#fafafa',ppb=p.width/p.beats;return `<div class="expanded-preview-track" style="left:${p.x-area.x}px;top:${p.y-area.y}px;width:${p.width}px;height:${p.height}px;background:${color}">${waveform(trackPeaks[t],p.width-6,p.height-4,Math.round((p.offset||0)*ppb),ppb)}</div>`;}).join('');},
+  preview(data,area){return data.state.positions.map((p,t)=>{if(p.deleted)return '';const color=palette.find(c=>c.id===data.state.colors[t])?.hex||'#222429',ppb=p.width/p.beats;return `<div class="expanded-preview-track" style="left:${p.x-area.x}px;top:${p.y-area.y}px;width:${p.width}px;height:${p.height}px;background:${color}">${waveform(trackPeaks[t],p.width-6,p.height-4,Math.round((p.offset||0)*ppb),ppb)}</div>`;}).join('');},
   async prepareAudio(){createAudio();await loadAudio();},resumeAudio:async()=>{createAudio();await ctx.resume();},resized(){sweeps.reschedule();layout.setObstacles(()=>blocks.bounds());render();},
   // A block's own pitch is applied to its finished mix, in the pitch worker.
   async mix(data,sourceSlice,pitch,children){const result=await mixBlockSnapshot(data,sourceSlice,children);if(!pitch)return result;const samples=await window.musicPitch(result.buffer.getChannelData(0),pitch),buffer=ctx.createBuffer(1,samples.length,result.buffer.sampleRate);buffer.copyToChannel(samples,0);return {buffer,beats:result.beats};},
